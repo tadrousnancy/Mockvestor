@@ -41,3 +41,10 @@ app-example
 # generated native folders
 /ios
 /android
+
+# IDE / editor folders
+.idea/
+.vscode/
+
+# safety: never keep a nested git repo in mobile
+.git/
