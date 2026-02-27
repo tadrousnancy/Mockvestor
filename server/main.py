@@ -54,7 +54,9 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
         new_user = User(
             username=user_data.username,
             email=user_data.email,
-            hashed_password=hashed_pw
+            hashed_password=hashed_pw,
+            first_name=user_data.first_name,
+            last_name=user_data.last_name
         )
         db.add(new_user)
         try:
