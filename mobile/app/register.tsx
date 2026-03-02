@@ -66,7 +66,7 @@ export default function Register() {
     return (
         <SafeAreaView style={styles.safe}>
             <View style={styles.container}>
-                <Text style={styles.title}>MOCKVESTER</Text>
+                <Text style={styles.title}>MOCKVESTOR</Text>
                 <Text style={styles.subtitle}>Create an account to continue</Text>
 
                 <View style={styles.card}>
