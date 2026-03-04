@@ -41,7 +41,7 @@ const HOLDINGS: Holding[] = [
             <View style={styles.headerRow}>
               <View style={styles.brandRow}>
                 <Ionicons name="trending-up" size={26} color={DARK_GREEN} />
-                <Text style={styles.brand}>MOCKVESTER</Text>
+                <Text style={styles.brand}>MOCKVESTOR</Text>
               </View>
     
               <Pressable
