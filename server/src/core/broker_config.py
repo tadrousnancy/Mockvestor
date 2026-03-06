@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from alpaca.broker.client import BrokerClient
+from alpaca.data.historical import StockHistoricalDataClient
+
 
 def get_broker_client():
     # set .env file path
@@ -15,4 +17,19 @@ def get_broker_client():
         api_key=os.getenv("ALPACA_KEY"),
         secret_key=os.getenv("ALPACA_SECRET"),
         sandbox=True
+    )
+
+
+def get_stock_client():
+    """
+    Creates the stock client and returns the client object
+    """
+
+    # get API and secret keys from .env
+    env_path = Path(__file__).parent / ".env"
+    load_dotenv(dotenv_path=env_path)
+
+    return StockHistoricalDataClient(
+        api_key=os.getenv("ALPACA_KEY"),
+        secret_key=os.getenv("ALPACA_SECRET"),
     )
