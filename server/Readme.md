@@ -16,13 +16,17 @@ Based on the `UserSignUp` schema in `main.py`:
 | `username` | String | Yes | Unique Identifier |
 | `email` | String(Email) | Yes | Valid email format |
 | `password` | String | Yes | Raw password (hashed server-side) |
+| `first_name` | String | Yes | User's legal first name |
+| `last_name` | String | Yes | User's legal last name |
 
 **Example Payload:**
 ```json
 {
     "username": "jdoe86",
     "email": "j.doe@example.com",
-    "password": "SecurePassword123!"
+    "password": "SecurePassword123!",
+    "first_name": "John",
+    "last_name": "Doe"
 }
 ```
 

@@ -16,6 +16,8 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True, nullable=False)
     email: str = Field(unique=True, index=True, nullable=False)
     hashed_password: str = Field(nullable=False)
+    first_name: str = Field(nullable=False)
+    last_name: str = Field(nullable=False)
     
     alpaca_account_id: Optional[str] = Field(default=None, nullable=True)
     
