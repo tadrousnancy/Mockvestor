@@ -6,3 +6,14 @@
 # env
 .env
 .env.*
+*env*
+
+# virtual environments
+venv/
+include/
+lib/
+Scripts/
+
+# Ignore compiled python files
+**/__pycache__/
+*.pyc
