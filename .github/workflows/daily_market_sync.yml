@@ -8,6 +8,7 @@ on:
   
   # button to manually run for testing
   workflow_dispatch:
+  push:
 
 jobs:
   sync-database:

@@ -3,7 +3,6 @@ import sys
 import csv
 import uuid
 import time
-import logging
 import traceback
 import requests
 from datetime import date, datetime, timedelta
@@ -16,19 +15,6 @@ from sqlmodel import SQLModel, create_engine, Session, Field
 from sqlalchemy import Column, Numeric, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, insert
 from sqlalchemy.exc import SQLAlchemyError
-
-#-------------------------------------------------------------
-# Logging Config
-#-------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("market_sync.log", mode='w', delay=False), 
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
 
 #-------------------------------------------------------------
 # Database Models
