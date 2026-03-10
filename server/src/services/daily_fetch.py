@@ -214,9 +214,17 @@ def sync_data(target_date: str):
     print(f"Successfully synced {len(data_to_insert)} rows for {target_date}")
 
 if __name__ == "__main__":
-    date_to_sync = date.today().isoformat()
+    if len(sys.argv) > 1:
+        date_to_sync = sys.argv[1]
+    else: 
+        date_to_sync = (date.today() - timedelta(days=1)).isoformat() 
+    
     print(f"Executing daily automated sync for date: {date_to_sync}")
     sync_data(date_to_sync)
+
+    #date_to_sync = date.today().isoformat()
+    #print(f"Executing daily automated sync for date: {date_to_sync}")
+    #sync_data(date_to_sync)
 #-------------------------------------------------------------
 # Previously used block to fill in 2 years worth of data
 #-------------------------------------------------------------
