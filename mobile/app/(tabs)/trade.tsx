@@ -153,7 +153,14 @@ export default function TradeScreen() {
 
         {/* review transaction */}
         <View style={styles.reviewCard}>
-          <Text style={styles.reviewTitle}>Review Transaction</Text>
+          <Text 
+            style={[
+                styles.reviewTitle,
+                { color: mode === "BUY" ? GREEN : SELL_PINK }
+            ]}
+          >
+            Review Transaction
+          </Text>
 
           <View style={styles.reviewRow}>
             <Text style={styles.reviewLabel}>Buying Power:</Text>
