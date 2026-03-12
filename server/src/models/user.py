@@ -4,7 +4,7 @@ from typing import Optional
 from sqlmodel import SQLModel, Field
 
 class User(SQLModel, table=True):
-    __tablemame__ = "profiles"
+    __tablename__ = "profiles"
     # This is the primary key
     id: Optional[uuid.UUID] = Field(
         default_factory=uuid.uuid4,

@@ -8,8 +8,6 @@ from sqlalchemy.orm import sessionmaker
 # set path to .env file
 env_path = Path(__file__).parent.parent / "core" / ".env"
 
-print(env_path)
-
 # load .env file
 load_dotenv(dotenv_path=env_path)
 
