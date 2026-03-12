@@ -1,31 +1,54 @@
 from pypfopt import EfficientFrontier, risk_models, expected_returns
 from pypfopt.discrete_allocation import DiscreteAllocation, get_latest_prices
+from daily_fetch import DailyMarketSummary as DMS, engine
+from sqlmodel import Session, select, col
+import pandas as pd
 
 
-def optimize_portfolio(df, portfolio_value):
+def get_market_data(holdings):
+    """
+    Retrieves stock market data from the current daily market summary
+    :param holdings: current stocks the user is invested in
+    :return prices: dataframe compatible with PyPortfolioOpt
+    """
+
+    # query for current holdings
+    statement = (select(DMS.trading_date, DMS.ticker, DMS.close_price)
+                 .where(col(DMS.ticker).in_(holdings)))
+    with Session(engine) as session:
+        results = session.exec(statement).all()
+
+    # convert results into a compatible df
+    df = pd.DataFrame(results, columns=["trading_date", "ticker", "close_price"])
+    prices = (df.pivot(index="trading_date", columns="ticker", values="close_price")
+              .sort_index()
+              .astype(float))
+    return prices
+
+
+def optimize_portfolio(prices, portfolio_value):
     """
     Must have at least 2 holdings
     Calculates weights for each holding
     Suggests how much of each stock to allocate to
-        e.g. 30% GOOGL,
-             25% NVDA,
-             25% AMZN,
-             20% AAPL
 
-    :param df: returned dataframe from account_service.get_market_data()
+    :param prices: returned dataframe from get_market_data()
     :param portfolio_value: how much money the user has (in dollars)
-    :return allocation: list of each stock and how much they should be allocated
-        denoted by [stock_name, value(%)]
-    :return leftover: remainder of portfolio value that can't be distributed further
+
+    :return total_allocation: dictionary listing each ticker and how much should be allocated
+        e.g. { "AAPL": {"shares": 7, "weight": 0.35},
+               "GOOGL": {"shares": 5, "weight": 0.25},
+               "NVDA": {"shares": 8, "weight": 0.40} }
+    :return leftover: remainder of portfolio value that can't be distributed further (in $)
     """
 
-    if len(df.columns) < 2:
+    if len(prices.columns) < 2:
         raise ValueError("Portfolio needs at least 2 holdings!")
 
     try:
         # calculate expected returns and sample covariance
-        mu = expected_returns.mean_historical_return(df)
-        S = risk_models.sample_cov(df)
+        mu = expected_returns.mean_historical_return(prices)
+        S = risk_models.sample_cov(prices)
 
         # maximize sharpe ratio
         ef = EfficientFrontier(mu, S)
@@ -35,18 +58,21 @@ def optimize_portfolio(df, portfolio_value):
         cleaned_weights = ef.clean_weights()
 
         # print results (for debugging)
-        exp_return, volatility, sharpe = ef.portfolio_performance(verbose=True)
+        ef.portfolio_performance(verbose=True)
     except Exception as e:
         raise ValueError(f"Optimization failed: {e}") from e
 
-    # convert weights to allocation
-    latest_prices = get_latest_prices(df)
+    # convert weights to allocated shares
+    latest_prices = get_latest_prices(prices)
     da = DiscreteAllocation(cleaned_weights, latest_prices, total_portfolio_value=portfolio_value)
     allocation, leftover = da.greedy_portfolio()
 
-    # for debugging
-    for name, value in allocation.items():
-        print(f"{name}: {value}")
-    print("Funds remaining: ${:.2f}".format(leftover))
+    # include weights in allocation
+    total_allocation = {}
+    for ticker, shares in allocation.items():
+        total_allocation[ticker] = {
+            "shares": shares,
+            "weight": cleaned_weights.get(ticker, 0)
+        }
 
-    return allocation, leftover
+    return total_allocation, leftover

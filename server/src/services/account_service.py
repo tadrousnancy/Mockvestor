@@ -68,29 +68,3 @@ def create_mock_account(user_email, first_name, last_name):
     )
 
     return client.create_account(request)
-
-
-def get_market_data(holdings):
-    """
-    Gathers the historical market data from Alpaca, by
-    initializing the stock client, then making a request
-
-    :param holdings: list of stocks the user currently owns, written as ticker symbols
-        e.g. something like ["GOOGL", "NVDA", "AMZN", etc.]
-    :return: bars: holds the market data based on given holdings
-        converted to a pandas dataframe to ensure compatibility with PyPortfolioOpt
-    """
-
-    client = get_stock_client()
-
-    # request past data --> 3 years is used as a baseline
-    today = date.today()
-    starting_pt = today - timedelta(days=365*3)
-    request_params = StockBarsRequest(
-                            symbol_or_symbols=holdings,
-                            timeframe=TimeFrame.Day,
-                            start=starting_pt,
-                            end=today
-    )
-    bars = client.get_stock_bars(request_params)
-    return bars.df["close"].unstack(level=0)
