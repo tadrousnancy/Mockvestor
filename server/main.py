@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
-from sqlmodel import Session
+from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
-from src.services.account_service import create_mock_account
+from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_value
 from src.services.database import create_db_and_tables, get_db
 from src.models.user import User
 from src.auth.Account import Account
@@ -15,10 +15,10 @@ async def lifespan(app: FastAPI):
     print("Initializing database...")
     create_db_and_tables()
     yield
-    # runs when server shuts down
+    # Runs when server shuts down
     print("Shutting down...")
 
-# create fastapi instance
+# Create fastapi instance
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -69,15 +69,40 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
             )
         db.refresh(new_user)
         
-        # register to alpaca
-        new_alpaca_account = create_mock_account(
-            user_email=user_data.email,
-            first_name=user_data.first_name,
-            last_name=user_data.last_name
-        )
+        # Register to alpaca
+        try:
+            new_alpaca_account = create_mock_account(
+                user_email=user_data.email,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name
+            )
+        except Exception as alpaca_error:
+            # Print error details
+            print("\n" + "="*40, flush=True)
+            print(f"🚨 ALPACA CREATION FAILED 🚨", flush=True)
+            print(f"Error Type: {type(alpaca_error)}", flush=True)
+            print(f"Error Details: {str(alpaca_error)}", flush=True)
+            
+            # Print raw API response
+            if hasattr(alpaca_error, 'response') and hasattr(alpaca_error.response, 'text'):
+                print(f"Raw API Response: {alpaca_error.response.text}", flush=True)
+            elif hasattr(alpaca_error, 'status_code'):
+                print(f"Status Code: {alpaca_error.status_code}", flush=True)
+            
+            print("="*40 + "\n", flush=True)
+            
+            # Delete user from database since broker account failed
+            db.delete(new_user)
+            db.commit()
+            
+            # Stop the request and send the error to frontend
+            raise HTTPException(
+                status_code=502, 
+                detail=f"Alpaca Error: {str(alpaca_error)}"
+            )
         
         if new_alpaca_account is None:
-            # delete user if alpaca is down
+            # Delete user if alpaca is down
             db.delete(new_user)
             db.commit()
             raise HTTPException(
@@ -85,10 +110,22 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
                 detail="Alpaca service is currently unavailable"
             )
         
-        # update supabase with alpaca id
+        # Update supabase with alpaca id
         new_user.alpaca_account_id = str(new_alpaca_account.id)
         db.add(new_user)
         db.commit()
+
+        # Fund the new account
+        try:
+            deposit_to_mock_account(
+                alpaca_account_id=new_alpaca_account.id,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+                amount="50000.00"
+            )
+
+        except Exception as e:
+            print(f"🚨 DEPOSIT ERROR: {str(e)}", flush=True)
         
         return {
             "status": "success",
@@ -104,3 +141,63 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
     except Exception as e:
         # Something crashed somwhere
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+@app.post("/accounts/login", status_code=status.HTTP_200_OK)
+async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
+    # Validate login data
+    is_valid = account_worker.login(login_data.username, login_data.password, db)
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+    
+    # Look up the user's alpaca account id
+    statement = select(User).where(User.username == login_data.username)
+    db_user = db.scalars(statement).first()
+
+    # Temp print statements to test functions
+    print(get_account_holdings(db_user.alpaca_account_id))
+    print(get_portfolio_value(db_user.alpaca_account_id))
+
+    return {
+        "status": "success",
+        "message": "Login successful",
+        "user_id": str(db_user.id),
+        "alpaca_account_id": db_user.alpaca_account_id
+    }
+
+class DepositRequest(BaseModel):
+    amount: float
+
+@app.post("/accounts/{user_id}/deposit")
+async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session = Depends(get_db)):
+    # Look up the user's alpaca account id
+    statement = select(User).where(User.username == user_id)
+    db_user = db.scalars(statement).first()
+
+    if not db_user or not db_user.alpaca_account_id:
+        raise HTTPException(status_code=404, detail="Brokerage account not found")
+    
+    try:
+        # Pass the data to alpaca
+        deposit_to_mock_account(
+            alpaca_account_id=db_user.alpaca_account_id,
+            first_name=db_user.first_name,
+            last_name=db_user.last_name,
+            amount=deposit_data.amount
+        )
+
+        return {
+            "status": "success",
+            "message": f"Successfully deposited ${deposit_data.amount}"
+        }
+
+    except Exception as e:
+        print(f"🚨 DEPOSIT ERROR: {str(e)}", flush=True)
+        raise HTTPException(status_code=502, detail="Transfer failed")
