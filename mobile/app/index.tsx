@@ -35,7 +35,7 @@ export default function Index() {
     return (
         <SafeAreaView style={styles.safe}>
             <View style={styles.container}>
-                <Text style={styles.title}>MOCKVESTER</Text>
+                <Text style={styles.title}>MOCKVESTOR</Text>
                 <Text style={styles.subtitle}>Sign in to Continue</Text>
 
                 <View style={styles.hero}>
