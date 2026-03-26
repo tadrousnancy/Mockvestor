@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { SafeAreaView, View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 const GREEN = "#2FD59B"
 const DARK_GREEN = "#1B7A61";
@@ -23,6 +24,7 @@ const HOLDINGS: Holding[] = [
   type RangeKey = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD";
   
   export default function TabIndex() {
+    const router = useRouter();
     const [range, setRange] = useState<RangeKey>("1W");
   
     // placeholder numbers 
@@ -122,7 +124,7 @@ const HOLDINGS: Holding[] = [
             {/* trade button */}
             <Pressable
               style={styles.tradeBtn}
-              onPress={() => console.log("go to trade screen")}
+              onPress={() => router.push("/trade")}
             >
               <Text style={styles.tradeText}>TRADE</Text>
             </Pressable>
