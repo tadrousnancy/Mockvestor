@@ -8,6 +8,7 @@ from src.services.database import create_db_and_tables, get_db
 from src.models.user import User
 from src.auth.Account import Account
 from fastapi.middleware.cors import CORSMiddleware
+from src.auth.jwt_handler import create_access_token, get_current_user_id
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -160,29 +161,49 @@ async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
     # Look up the user's alpaca account id
     statement = select(User).where(User.username == login_data.username)
     db_user = db.scalars(statement).first()
-
-    # Temp print statements to test functions
-    print(get_account_holdings(db_user.alpaca_account_id))
-    print(get_portfolio_value(db_user.alpaca_account_id))
+    
+    # Generate the JWT
+    access_token = create_access_token(user_id=str(db_user.id))
 
     return {
         "status": "success",
         "message": "Login successful",
         "user_id": str(db_user.id),
-        "alpaca_account_id": db_user.alpaca_account_id
+        "alpaca_account_id": db_user.alpaca_account_id,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
 
 class DepositRequest(BaseModel):
     amount: float
 
 @app.post("/accounts/{user_id}/deposit")
-async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session = Depends(get_db)):
+async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
     # Look up the user's alpaca account id
     statement = select(User).where(User.username == user_id)
     db_user = db.scalars(statement).first()
 
-    if not db_user or not db_user.alpaca_account_id:
-        raise HTTPException(status_code=404, detail="Brokerage account not found")
+    if not db_user:
+        raise HTTPException(
+            status_code=404, 
+            detail="User not found"
+        )
+    
+    """
+    Security Check: Does the UUID inside the token match the 
+    UUID of the requested account?
+    """
+    if current_user_id != str(db_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this account"
+        )
+    
+    if not db_user.alpaca_account_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Brokerage account not found"
+        )
     
     try:
         # Pass the data to alpaca
@@ -201,3 +222,46 @@ async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session 
     except Exception as e:
         print(f"🚨 DEPOSIT ERROR: {str(e)}", flush=True)
         raise HTTPException(status_code=502, detail="Transfer failed")
+    
+@app.get("/accounts/{user_id}/portfolio")
+async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
+    # Look up the user by the username
+    statement = select(User).where(User.username == user_id)
+    db_user = db.scalars(statement).first()
+    
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    # Security Check
+    if current_user_id != str(db_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this account"
+        )
+    
+    if not db_user.alpaca_account_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Brokerage account not found"
+        )
+    
+    try:
+        portfolio_data = get_portfolio_value(db_user.alpaca_account_id)
+        holdings_data = get_account_holdings(db_user.alpaca_account_id)
+        
+        # Package it for the frontend
+        return {
+            "status": "success",
+            "portfolio": portfolio_data,
+            "holdings": holdings_data
+        }
+    
+    except Exception as e:
+        print(f"🚨 PORTFOLIO ERROR: {str(e)}", flush=True)
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to fetch portfolio data"
+        )
