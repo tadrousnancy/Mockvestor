@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, Pressable, FlatList, Alert } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, Pressable, FlatList, Alert, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch } from "../../lib/api";
@@ -37,7 +37,8 @@ export default function TabIndex() {
     const [loading, setLoading] = useState(true);
     const [portfolio, setPortfolio] = useState<any>(null);
     const [holdings, setHoldings] = useState<Holding[]>([]);
-
+    const [depositAmount, setDepositAmount] = useState("");
+    const [depositing, setDepositing] = useState(false);
 
     const portfolioValue = portfolio?.portfolio_value ?? 0;
     const buyingPower = portfolio?.buying_power ?? 0;
@@ -84,6 +85,43 @@ export default function TabIndex() {
     async function handleLogout() {
         await clearSession();
         router.replace("/");
+    }
+
+    async function handleDeposit() {
+        const amountNum = Number(depositAmount);
+
+        if (!Number.isFinite(amountNum) || amountNum <= 0) {
+            Alert.alert("Invalid amount", "Please enter a deposit amount greater than 0.");
+            return;
+        }
+
+        try {
+            setDepositing(true);
+
+            const username = await getStoredUsername();
+            if (!username) {
+                throw new Error("No stored username found. Please log in again.");
+            }
+
+            const data = await apiFetch(
+                `/accounts/${username}/deposit`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        amount: amountNum,
+                    }),
+                },
+                true
+            );
+
+            Alert.alert("Deposit Successful", data.message || `Successfully deposited $${amountNum}`);
+            setDepositAmount("");
+            await loadPortfolio();
+        } catch (error: any) {
+            Alert.alert("Deposit Error", error.message || "Failed to deposit funds.");
+        } finally {
+            setDepositing(false);
+        }
     }
 
     return (
@@ -174,6 +212,29 @@ export default function TabIndex() {
                     style={{ width: "100%" }}
                 />
 
+                <View style={styles.depositCard}>
+                    <Text style={styles.depositTitle}>Add Funds</Text>
+
+                    <TextInput
+                        value={depositAmount}
+                        onChangeText={setDepositAmount}
+                        keyboardType="decimal-pad"
+                        placeholder="5000"
+                        placeholderTextColor="rgba(255,255,255,0.55)"
+                        style={styles.depositInput}
+                    />
+
+                    <Pressable
+                        style={[styles.depositBtn, depositing && { opacity: 0.7 }]}
+                        onPress={handleDeposit}
+                        disabled={depositing}
+                    >
+                        <Text style={styles.secondaryBtnText}>
+                            {depositing ? "DEPOSITING..." : "DEPOSIT FUNDS"}
+                        </Text>
+                    </Pressable>
+                </View>
+
                 {/* trade button */}
                 <Pressable
                     style={styles.tradeBtn}
@@ -237,6 +298,37 @@ function stripTrailingZeros(n: number) {
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: BG },
     container: { flex: 1, paddingHorizontal: 18, paddingTop: 10 },
+
+    depositCard: {
+        width: "100%",
+        backgroundColor: BLACK,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 12,
+    },
+    depositTitle: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "900",
+        marginBottom: 10,
+    },
+    depositInput: {
+        backgroundColor: "rgba(255,255,255,0.12)",
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "800",
+        marginBottom: 10,
+    },
+    depositBtn: {
+        width: "100%",
+        backgroundColor: "#1B7A61",
+        borderRadius: 14,
+        paddingVertical: 12,
+        alignItems: "center",
+    },
 
     headerRow: {
         width: "100%",
