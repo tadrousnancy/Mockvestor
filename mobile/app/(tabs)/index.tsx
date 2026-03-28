@@ -177,8 +177,17 @@ export default function TabIndex() {
                 {/* trade button */}
                 <Pressable
                     style={styles.tradeBtn}
-                    onPress={() => router.push("/trade")}                >
+                    onPress={() => router.push("./trade")}                    // potential expo router typed-route issue, may need to
+                >
                     <Text style={styles.tradeText}>TRADE</Text>
+                </Pressable>
+
+                <Pressable style={styles.refreshBtn} onPress={loadPortfolio}>
+                    <Text style={styles.secondaryBtnText}>REFRESH</Text>
+                </Pressable>
+
+                <Pressable style={styles.logoutBtn} onPress={handleLogout}>
+                    <Text style={styles.secondaryBtnText}>LOG OUT</Text>
                 </Pressable>
             </View>
         </SafeAreaView>
