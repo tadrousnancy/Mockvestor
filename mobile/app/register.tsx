@@ -1,3 +1,6 @@
+import { API_BASE_URL } from "../config";
+
+
 import React, { useRef, useState } from "react";
 import {
     SafeAreaView,
@@ -41,27 +44,51 @@ export default function Register() {
         });
     }
 
-    function handleCreate() {
+    //handleCreate changed, handles create and shows the backend error more clearly and keeps success flow still simple
+    async function handleCreate() {
         if (!firstName.trim() || !lastName.trim() || !email.trim() || !username.trim()) {
             Alert.alert("Missing info", "Please fill out First Name, Last Name, Email, and Username.");
             return;
         }
+
         if (!password) {
             Alert.alert("Missing password", "Please enter a password.");
             return;
         }
+
         if (password !== confirm) {
             Alert.alert("Passwords do not match", "Confirm Password must match Password.");
             return;
         }
 
-        // Later: Supabase signUp / backend call with:
-        // { firstName, lastName, email, username, password }
-        Alert.alert(
-            "UI only",
-            `Create pressed\n${firstName} ${lastName}\nemail=${email}\nusername=${username}`
-        );
+        try {
+            const response = await fetch(`${API_BASE_URL}/accounts/create`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    username,
+                    email,
+                    password,
+                    first_name: firstName,
+                    last_name: lastName,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Failed to create account");
+            }
+
+            Alert.alert("Success", "Account created successfully! Please log in.");
+            router.back();
+        } catch (error: any) {
+            Alert.alert("Registration Error", error.message || "Something went wrong.");
+        }
     }
+
 
     return (
         <SafeAreaView style={styles.safe}>
@@ -234,3 +261,9 @@ const styles = StyleSheet.create({
         color: "#0b2b22",
     },
 });
+
+
+
+
+
+
