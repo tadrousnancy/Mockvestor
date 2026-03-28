@@ -48,7 +48,7 @@ export default function Index() {
 
             await saveSession({
                 accessToken: data.access_token,
-                username: data.username,
+                username: data.username ?? username,
                 userId: data.user_id,
                 alpacaAccountId: data.alpaca_account_id,
             });
