@@ -11,10 +11,11 @@ from typing import Optional
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlmodel import SQLModel, create_engine, Session, Field
+from sqlmodel import SQLModel, create_engine, Session, Field, select
 from sqlalchemy import Column, Numeric, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, insert
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException
 
 #-------------------------------------------------------------
 # Database Models
@@ -79,7 +80,7 @@ def load_approved_tickers(filename: str = "tickers.csv") -> set:
                             approved.add(ticker)
     except FileNotFoundError:
         logger.warning(f"Warning: {filename} not found in {Path(__file__).parent}. Proceeding with empty approved list.")
-        
+
     return approved
 
 # Update database with daily OHLC data
@@ -91,16 +92,16 @@ def sync_data(target_date: str):
     unique_results = {item["T"]: item for item in results}
     deduplicated_items = list(unique_results.values())
     approved_tickers = load_approved_tickers("tickers.csv")
-    
+
     clean_universe_items = [
         item for item in deduplicated_items
         if item["T"] in approved_tickers
     ]
-    
+
     if not clean_universe_items:
         print(f"No approved tickers found in the API response for {target_date}.")
         return
-    
+
     # prepare data for SQLModel
     data_to_insert = [
         {
@@ -126,10 +127,10 @@ def sync_data(target_date: str):
             # Loop through the data in chunks
             for i in range(0, len(data_to_insert), chunk_size):
                 chunk = data_to_insert[i:i + chunk_size]
-                
+
                 # postgresql native 'ON CONFLICT DO UPDATE'
                 stmt = insert(DailyMarketSummary).values(chunk)
-                
+
                 # We now point EXACTLY to the name we created in SQL
                 upsert_stmt = stmt.on_conflict_do_update(
                     constraint="market_data_unique_row",
@@ -145,11 +146,11 @@ def sync_data(target_date: str):
                     }
                 )
                 session.execute(upsert_stmt)
-            
+
             # Commit the transaction only if all chunks are successful
             session.commit()
             print("Sync successful!")
-            
+
         except SQLAlchemyError as e:
             session.rollback()
             print(f"DATABASE ERROR DETECTED:{str(e)}")
@@ -157,13 +158,13 @@ def sync_data(target_date: str):
             session.rollback()
             print("AN UNEXPECTED ERROR OCCURRED:")
             traceback.print_exc()
-    
+
     # DEBUGGING TO DETERMINE FAILURE POINT
-    #chunk_size = 1 
+    #chunk_size = 1
     #with Session(engine) as session:
     #    for i in range(0, len(data_to_insert), chunk_size):
     #        chunk = data_to_insert[i:i + chunk_size]
-    #        
+    #
     #        stmt = insert(DailyMarketSummary).values(chunk)
     #        upsert_stmt = stmt.on_conflict_do_update(
     #            constraint="market_data_unique_row",
@@ -178,7 +179,7 @@ def sync_data(target_date: str):
     #                "unix_timestamp": stmt.excluded.unix_timestamp
     #            }
     #        )
-    #        
+    #
     #        try:
     #            # Execute and commit row-by-row just for debugging
     #            session.execute(upsert_stmt)
@@ -189,22 +190,69 @@ def sync_data(target_date: str):
     #            print(f"🔥 CRASH DETECTED ON TICKER: {chunk[0].get('ticker')}")
     #            print("="*50)
     #            print(f"EXACT DATA PAYLOAD:\n{chunk[0]}\n")
-    #            
+    #
     #            # e.orig strips away the SQLAlchemy wrapper and shows the raw Postgres error
     #            print(f"SPECIFIC POSTGRES ERROR:\n{getattr(e, 'orig', e)}")
     #            print("="*50 + "\n")
-    #            
+    #
     #            # Stop the script immediately so you can read the error
     #            sys.exit(1)
-    
+
     print(f"Successfully synced {len(data_to_insert)} rows for {target_date}")
+
+def get_historical_chart_data(db: Session, ticker: str):
+    """
+    Query the database for hitorical OHLCV data to power charts
+    """
+
+    try:
+        statement = select(DailyMarketSummary).where(
+            DailyMarketSummary.ticker == ticker.upper()
+        ).order_by(DailyMarketSummary.trading_date.asc())
+
+        # Debugging print
+        print("🚨🚨🚨Reaching in for history🚨🚨🚨")
+
+        results = db.scalars(statement).all()
+
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No historical data found for {ticker}"
+            )
+
+        chart_data = []
+        for row in results:
+            chart_data.append({
+                "date": row.trading_date.isoformat(),
+                "open": float(row.open_price),
+                "close": float(row.close_price),
+                "high": float(row.high_price),
+                "low": float(row.low_price),
+                "volume": int(row.volume)
+            })
+
+        return {
+            "symbol": ticker.upper(),
+            "data_points": len(chart_data),
+            "chart_data": chart_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"🚨 DB QUERY ERROR: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve historical data"
+        )
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         date_to_sync = sys.argv[1]
-    else: 
-        date_to_sync = (date.today() - timedelta(days=1)).isoformat() 
-    
+    else:
+        date_to_sync = (date.today() - timedelta(days=1)).isoformat()
+
     print(f"Executing daily automated sync for date: {date_to_sync}")
     sync_data(date_to_sync)
 
