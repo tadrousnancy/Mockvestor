@@ -364,6 +364,12 @@ async def fetch_historical_data(
 ):
     historical_data = get_historical_chart_data(db, ticker)
 
+    if not historical_data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data found for {ticker.upper()}"
+        )
+
     return {
         "status": "success",
         **historical_data

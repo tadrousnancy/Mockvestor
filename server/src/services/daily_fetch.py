@@ -15,7 +15,7 @@ from sqlmodel import SQLModel, create_engine, Session, Field, select
 from sqlalchemy import Column, Numeric, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, insert
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException
+#from fastapi import HTTPException
 
 #-------------------------------------------------------------
 # Database Models
@@ -216,10 +216,7 @@ def get_historical_chart_data(db: Session, ticker: str):
         results = db.scalars(statement).all()
 
         if not results:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No historical data found for {ticker}"
-            )
+            return None
 
         chart_data = []
         for row in results:
@@ -238,14 +235,11 @@ def get_historical_chart_data(db: Session, ticker: str):
             "chart_data": chart_data
         }
 
-    except HTTPException:
-        raise
+    #except HTTPException:
+    #    raise
     except Exception as e:
         print(f"🚨 DB QUERY ERROR: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to retrieve historical data"
-        )
+        raise e
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
