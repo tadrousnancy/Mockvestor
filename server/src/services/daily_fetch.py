@@ -69,7 +69,7 @@ def load_approved_tickers(filename: str = "tickers.csv") -> set:
     print(csv_path)
 
     try:
-        with open(csv_path, mode='r', encoding='utf-8') as f:
+        with open(csv_path, mode='r', encoding='utf-8-sig') as f:
             reader = csv.reader(f)
             for row in reader:
                 for item in row:

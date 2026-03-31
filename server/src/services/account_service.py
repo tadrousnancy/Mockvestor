@@ -1,4 +1,6 @@
 import os
+import csv
+from pathlib import Path
 from alpaca.broker.requests import CreateAccountRequest, CreateACHRelationshipRequest, CreateACHTransferRequest
 from alpaca.broker.models import Contact, Identity, Disclosures, Agreement
 from alpaca.broker.enums import AgreementType, TaxIdType, BankAccountType, TransferDirection, TransferTiming
@@ -6,6 +8,8 @@ from src.core.broker_config import get_broker_client, get_data_client
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 from alpaca.data.requests import StockLatestQuoteRequest
+
+ticker_path = Path(__file__).parent / "tickers.csv"
 
 def create_mock_account(user_email, first_name, last_name):
     # initialize broker client
@@ -169,6 +173,18 @@ def submit_mock_order(alpaca_account_id: str, symbol: str, qty: float, side: str
     """
     Submits a market order to Alpaca on behalf of the user
     """
+    # Check that the ticker symbol exists in limited dataset
+    symbol_found = False
+    with open(ticker_path, newline='', encoding='utf-8-sig') as ticker_file:
+        reader = csv.reader(ticker_file)
+        for row in reader:
+            if symbol in row:
+                symbol_found = True
+                break
+    
+    if not symbol_found:
+        raise ValueError(f"Our apologies, {symbol.upper()} is not included in current dataset.")
+
     client = get_broker_client()
 
     # Translate the frontend string into Alpaca's specific OrderSide enum
@@ -205,6 +221,18 @@ def get_live_quote(symbol: str):
     """
     Fetches the latest real-time quote for a specific stock ticker
     """
+
+    # Check that the ticker symbol exists in limited dataset
+    symbol_found = False
+    with open(ticker_path, newline='', encoding='utf-8-sig') as ticker_file:
+        reader = csv.reader(ticker_file)
+        for row in reader:
+            if symbol in row:
+                symbol_found = True
+                break
+    
+    if not symbol_found:
+        raise ValueError(f"Our apologies, {symbol.upper()} is not included in current dataset.")
 
     data_client = get_data_client()
 
