@@ -307,28 +307,26 @@ if __name__ == "__main__":
         print(f"Executing daily automated sync for date: {date_to_sync}")
         sync_data(date_to_sync)
 
-    # populate_ticker_metadata()
-
     #date_to_sync = date.today().isoformat()
     #print(f"Executing daily automated sync for date: {date_to_sync}")
     #sync_data(date_to_sync)
 #-------------------------------------------------------------
 # Previously used block to fill in 7 years worth of data
 #-------------------------------------------------------------
-    today = date.today()
-    start_date = today - timedelta(days=7*365 + (1 if today.month > 2 and today.year % 4 == 0 else 0))
-    seven_years_ago = date(today.year - 7, today.month, today.day)
-    one_day = timedelta(days=1)
-    current_date = start_date
-    count = 0
-
-    while current_date <= today:
-        print(f"Running data sync for {str(current_date)}...")
-        sync_vix(str(current_date))
-
-        current_date += one_day
-        count += 1
-
-        # if count == 5:
-        #     time.sleep(60)
-        #     count = 0
+    # today = date.today()
+    # start_date = today - timedelta(days=7*365 + (1 if today.month > 2 and today.year % 4 == 0 else 0))
+    # seven_years_ago = date(today.year - 7, today.month, today.day)
+    # one_day = timedelta(days=1)
+    # current_date = start_date
+    # count = 0
+    #
+    # while current_date <= today:
+    #     print(f"Running data sync for {str(current_date)}...")
+    #     sync_vix(str(current_date))
+    #
+    #     current_date += one_day
+    #     count += 1
+    #
+    #     # if count == 5:
+    #     #     time.sleep(60)
+    #     #     count = 0
