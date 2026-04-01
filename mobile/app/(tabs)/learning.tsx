@@ -63,6 +63,49 @@ const concepts = [
     why:
       "Low liquidity can lead to slippage, making entries and exits more costly and unpredictable.",
   },
+  {
+    title: "RSI (Relative Strength Index)",
+    description:
+      "RSI is a momentum indicator that compares the size of recent gains to recent losses, scaled from 0 to 100.",
+    why:
+      "Values above 70 may indicate the asset has risen too quickly (overbought), while values below 30 suggest it may have fallen too quickly (oversold), which signals potential shifts in direction.",
+  },
+  {
+    title: "Bollinger Bandwidth",
+    description:
+      "Bollinger Bandwidth measures the distance between the upper and lower Bollinger Bands, reflecting how much price is fluctuating.",
+    why:
+      "Low bandwidth indicates low volatility and often precedes large price movements, while high bandwidth reflects active price swings and increased uncertainty.",
+  },
+  {
+    title: "Moving Average (MA)",
+    description:
+      "A moving average smooths price data over a set period to highlight the overall trend.",
+    why:
+      "It helps traders identify whether an asset is generally trending upward or downward, and can act as a dynamic level where price may pause or change direction.",
+  },
+  {
+    title: "MACD (Moving Average Convergence Divergence)",
+    description:
+      "MACD compares two moving averages to track changes in momentum and trend strength.",
+    why:
+      "When the MACD line crosses above or below its signal line, it may indicate that momentum is shifting, helping traders identify potential entry or exit points.",
+  },
+  {
+    title: "Volume",
+    description:
+      "Volume represents the number of shares or contracts traded within a specific time period.",
+    why:
+      "Price movements supported by high volume suggest stronger market participation, while low-volume moves are less reliable and more likely to fade or lose strength.",
+  },
+  {
+    title: "Sharpe Ratio",
+    description:
+      "The Sharpe Ratio measures the return of an investment relative to the risk taken to achieve it.",
+    why:
+      "A higher Sharpe Ratio indicates more efficient returns per unit of risk, this helps compare whether trades are smart or risky in reference to the level of volatility.",
+  },
+  
 ];
 
 export default function LearningScreen() {
