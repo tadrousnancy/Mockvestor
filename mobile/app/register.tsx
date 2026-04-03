@@ -188,6 +188,16 @@ export default function Register() {
                         <Text style={styles.buttonText}>Create Account</Text>
                     </Pressable>
 
+                    {/* temportary test button */}
+                    <Pressable
+                        style={[styles.button, { marginTop: 10, backgroundColor: "#ffffff" }]}
+                        onPress={() => router.push("/(tabs)")}
+                    > 
+                        <Text style={[styles.buttonText, { fontSize: 14 }]}>
+                            Go to Dashboard (Dev)
+                        </Text>
+                    </Pressable>
+
                     <Pressable onPress={() => router.back()} hitSlop={10}>
                         <Text style={styles.back}>Back to Login</Text>
                     </Pressable>
