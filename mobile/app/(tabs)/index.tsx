@@ -81,9 +81,10 @@ export default function TabIndex() {
             loadPortfolio();
         }, [loadPortfolio])
     ); // this should now load the portfolio whenever the dashboard tab is opened again
-    //logout handler
+// logout handler
     async function handleLogout() {
         await clearSession();
+        router.dismissAll(); // added to clear nested stacked routes, should logout and update screen to login page
         router.replace("/");
     }
 
@@ -238,7 +239,7 @@ export default function TabIndex() {
                 {/* trade button */}
                 <Pressable
                     style={styles.tradeBtn}
-                    onPress={() => router.push("./trade")}                    // potential expo router typed-route issue, may need to
+                    onPress={() => router.push("./trade")}// potential expo router typed-route issue
                 >
                     <Text style={styles.tradeText}>TRADE</Text>
                 </Pressable>
