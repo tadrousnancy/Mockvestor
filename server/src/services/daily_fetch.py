@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 from pathlib import Path
+from src.core.logger import logger
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session, Field, select
 from sqlalchemy import Column, Numeric, DateTime, func
@@ -77,7 +78,7 @@ def load_approved_tickers(filename: str = "tickers.csv") -> set:
                         if ticker not in ('TICKER', 'SYMBOL', 'TICKERS'):
                             approved.add(ticker)
     except FileNotFoundError:
-        print(f"Warning: {filename} not found in {Path(__file__).parent}. Proceeding with empty approved list.")
+        logger.warning(f"Warning: {filename} not found in {Path(__file__).parent}. Proceeding with empty approved list.")
 
     return approved
 
@@ -97,7 +98,7 @@ def sync_data(target_date: str):
     ]
 
     if not clean_universe_items:
-        print(f"No approved tickers found in the API response for {target_date}.")
+        logger.info(f"No approved tickers found in the API response for {target_date}.")
         return
 
     # prepare data for SQLModel
@@ -147,14 +148,14 @@ def sync_data(target_date: str):
 
             # Commit the transaction only if all chunks are successful
             session.commit()
-            print("Sync successful!")
+            logger.debug("Sync successful!")
 
         except SQLAlchemyError as e:
             session.rollback()
-            print(f"DATABASE ERROR DETECTED:{str(e)}")
+            logger.info(f"DATABASE ERROR DETECTED:{str(e)}")
         except Exception as e:
             session.rollback()
-            print(f"AN UNEXPECTED ERROR OCCURRED: {traceback.print_exc()}")
+            logger.info(f"AN UNEXPECTED ERROR OCCURRED: {traceback.print_exc()}")
             traceback.print_exc()
 
     # DEBUGGING TO DETERMINE FAILURE POINT
@@ -196,7 +197,7 @@ def sync_data(target_date: str):
     #            # Stop the script immediately so you can read the error
     #            sys.exit(1)
 
-    print(f"Successfully synced {len(data_to_insert)} rows for {target_date}")
+    logger.debug(f"Successfully synced {len(data_to_insert)} rows for {target_date}")
 
 def get_historical_chart_data(db: Session, ticker: str):
     """
@@ -209,7 +210,7 @@ def get_historical_chart_data(db: Session, ticker: str):
         ).order_by(DailyMarketSummary.trading_date.asc())
 
         # Debugging print
-        print(f"Fetching history for {ticker}")
+        logger.debug(f"Fetching history for {ticker}")
 
         results = db.scalars(statement).all()
 
@@ -236,7 +237,7 @@ def get_historical_chart_data(db: Session, ticker: str):
     #except HTTPException:
     #    raise
     except Exception as e:
-        print(f"DB QUERY ERROR: {str(e)}")
+        logger.info(f"DB QUERY ERROR: {str(e)}")
         raise e
 
 if __name__ == "__main__":
@@ -245,7 +246,7 @@ if __name__ == "__main__":
     else:
         date_to_sync = (date.today() - timedelta(days=1)).isoformat()
 
-    print(f"Executing daily automated sync for date: {date_to_sync}")
+    logger.debug(f"Executing daily automated sync for date: {date_to_sync}")
     sync_data(date_to_sync)
 
     #date_to_sync = date.today().isoformat()
