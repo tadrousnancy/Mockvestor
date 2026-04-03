@@ -1,3 +1,6 @@
+import { API_BASE_URL } from "../config";
+import { saveSession } from "../lib/auth"; //added import
+
 import React, { useRef, useState } from "react";
 import {
     SafeAreaView,
@@ -18,10 +21,45 @@ export default function Index() {
     const [showPass, setShowPass] = useState(false);
     const passRef = useRef<TextInput>(null);
 
-    function handleLogin() {
-        // Later: Supabase / backend call with { username, password }
-        Alert.alert("UI only", `Login pressed\nusername=${username || "(empty)"}`);
+    //updated handleLogin to match the backend login response structure shown in main.py and integration doc
+    async function handleLogin() {
+        if (!username.trim() || !password.trim()) {
+            Alert.alert("Missing info", "Please enter your username and password.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/accounts/login`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    username,
+                    password,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Login failed");
+            }
+
+            await saveSession({
+                accessToken: data.access_token,
+                username: data.username ?? username,
+                userId: data.user_id,
+                alpacaAccountId: data.alpaca_account_id,
+            });
+
+            Alert.alert("Success", "Login successful!");
+            router.replace("/(tabs)");
+        } catch (error: any) {
+            Alert.alert("Login Error", error.message || "Something went wrong.");
+        }
     }
+
 
     function toggleShowPassword() {
         setShowPass((prev) => !prev);

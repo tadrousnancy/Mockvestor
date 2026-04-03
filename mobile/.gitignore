@@ -45,6 +45,6 @@ app-example
 # IDE / editor folders
 .idea/
 .vscode/
-
+*.iml
 # safety: never keep a nested git repo in mobile
-.git/
+mobile/.git/
