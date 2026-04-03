@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from src.core.logger import logger
 from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -15,7 +16,7 @@ load_dotenv(dotenv_path=env_path)
 # debug printing **TO BE REMOVED**
 db_url = os.getenv("DATABASE_URL")
 masked_url = db_url.split("@")[1] if "@" in db_url else "INVALUD_URL_FORMAT"
-print(f"Targeting Database Host: ...@{masked_url}")
+logger.debug(f"Targeting Database Host: ...@{masked_url}")
 
 engine = create_engine(db_url, echo=True, pool_pre_ping=True)
 

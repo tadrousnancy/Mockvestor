@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
+from src.core.logger import logger
 from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_value, submit_mock_order, get_live_quote
 from src.services.database import create_db_and_tables, get_db
 from src.models.user import User
@@ -15,11 +16,11 @@ from src.services.daily_fetch import get_historical_chart_data
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run when server starts
-    print("Initializing database...")
+    logger.debug("Initializing database...")
     create_db_and_tables()
     yield
     # Runs when server shuts down
-    print("Shutting down...")
+    logger.debug("Shutting down...")
 
 # Create fastapi instance
 app = FastAPI(lifespan=lifespan)
@@ -80,19 +81,7 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
                 last_name=user_data.last_name
             )
         except Exception as alpaca_error:
-            # Print error details
-            print("\n" + "="*40, flush=True)
-            print(f"🚨 ALPACA CREATION FAILED 🚨", flush=True)
-            print(f"Error Type: {type(alpaca_error)}", flush=True)
-            print(f"Error Details: {str(alpaca_error)}", flush=True)
-
-            # Print raw API response
-            if hasattr(alpaca_error, 'response') and hasattr(alpaca_error.response, 'text'):
-                print(f"Raw API Response: {alpaca_error.response.text}", flush=True)
-            elif hasattr(alpaca_error, 'status_code'):
-                print(f"Status Code: {alpaca_error.status_code}", flush=True)
-
-            print("="*40 + "\n", flush=True)
+            logger.info(f"ALPACA CREATION FAILED - {str(alpaca_error)}")
 
             # Delete user from database since broker account failed
             db.delete(new_user)
@@ -128,7 +117,7 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
             )
 
         except Exception as e:
-            print(f"🚨 DEPOSIT ERROR: {str(e)}", flush=True)
+            logger.info(f"DEPOSIT ERROR: {str(e)}")
 
         return {
             "status": "success",
@@ -138,13 +127,12 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
             "alpaca_account_id": new_alpaca_account.id
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         # Re-raise the HTTPExceptions we manually triggered above
         raise
     except Exception as e:
         # Something crashed somwhere
+        logger.info(f"HTTP Exception: Status Code 500 - Internal Server Error")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 class UserLogin(BaseModel):
@@ -225,7 +213,7 @@ async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session 
         }
 
     except Exception as e:
-        print(f"🚨 DEPOSIT ERROR: {str(e)}", flush=True)
+        logger.info(f"DEPOSIT ERROR: {str(e)}")
         raise HTTPException(status_code=502, detail="Transfer failed")
 
 @app.get("/accounts/{user_id}/portfolio")
@@ -265,7 +253,7 @@ async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_use
         }
 
     except Exception as e:
-        print(f"🚨 PORTFOLIO ERROR: {str(e)}", flush=True)
+        logger.info(f"PORTFOLIO ERROR: {str(e)}...failed to fetch portfolio data.")
         raise HTTPException(
             status_code=502,
             detail="Failed to fetch portfolio data"
@@ -302,10 +290,6 @@ async def place_order(user_id: str, order_data: OrderRequest, db: Session = Depe
 
     try:
         # Submit the order
-        print(f"{db_user.alpaca_account_id}")
-        print(f"{order_data.symbol}")
-        print(f"{order_data.qty}")
-        print(f"{order_data.side}")
         order = submit_mock_order(
             alpaca_account_id=db_user.alpaca_account_id,
             symbol=order_data.symbol,
