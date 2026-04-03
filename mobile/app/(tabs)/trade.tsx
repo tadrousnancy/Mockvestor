@@ -53,20 +53,22 @@ export default function TradeScreen() {
     const [range, setRange] = useState<RangeKey>("1W");
     const [mode, setMode] = useState<TradeMode>("BUY");
     const [quantity, setQuantity] = useState("1.0");
-    const [symbol, setSymbol] = useState("AAPL");
+
+    // changed: split symbol into raw typed input and the symbol actually searched
+    const [symbolInput, setSymbolInput] = useState("");
+    const [activeSymbol, setActiveSymbol] = useState("");
 
     const [buyingPower, setBuyingPower] = useState(0);
     const [heldShares, setHeldShares] = useState(0);
 
-    // changed: separate live quote and historical chart state instead of only currentPrice
     const [quote, setQuote] = useState<QuoteData | null>(null);
     const [chartData, setChartData] = useState<ChartPoint[]>([]);
 
-    // changed: split loading states so portfolio, quote, and chart can load independently
-    const [loadingPortfolio, setLoadingPortfolio] = useState(true);
-    const [loadingQuote, setLoadingQuote] = useState(true);
-    const [loadingChart, setLoadingChart] = useState(true);
+    const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+    const [loadingQuote, setLoadingQuote] = useState(false);
+    const [loadingChart, setLoadingChart] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [searching, setSearching] = useState(false);
 
     const rangeButtons: RangeKey[] = useMemo(
         () => ["1D", "1W", "1M", "3M", "6M", "YTD"],
@@ -74,7 +76,9 @@ export default function TradeScreen() {
     );
 
     const qtyNum = Number(quantity || 0);
-    const normalizedSymbol = symbol.trim().toUpperCase();
+    const normalizedInputSymbol = symbolInput.trim().toUpperCase();
+    const normalizedActiveSymbol = activeSymbol.trim().toUpperCase();
+    const symbolIsSynced = normalizedInputSymbol === normalizedActiveSymbol;
 
     // changed: use ask price for buying and bid price for selling from the live quote endpoint
     const displayPrice =
@@ -85,7 +89,7 @@ export default function TradeScreen() {
     const estimatedCost =
         displayPrice != null && Number.isFinite(qtyNum) ? qtyNum * displayPrice : null;
 
-    // changed: still uses portfolio endpoint but now only to get buying power and held shares
+    // changed: still uses portfolio endpoint, but now only to get buying power + held shares for active searched symbol
     const loadPortfolioInfo = useCallback(async () => {
         try {
             setLoadingPortfolio(true);
@@ -105,7 +109,7 @@ export default function TradeScreen() {
                 : data?.holdings?.positions ?? [];
 
             const match = holdings.find(
-                (h) => h.symbol?.toUpperCase() === normalizedSymbol
+                (h) => h.symbol?.toUpperCase() === normalizedActiveSymbol
             );
 
             setHeldShares(match?.shares ?? 0);
@@ -114,11 +118,11 @@ export default function TradeScreen() {
         } finally {
             setLoadingPortfolio(false);
         }
-    }, [normalizedSymbol]);
+    }, [normalizedActiveSymbol]);
 
-    // added: call new live quote backend endpoint for arbitrary symbols
+    // added: call new live quote backend endpoint only for active searched symbol
     const loadLiveQuote = useCallback(async () => {
-        if (!normalizedSymbol) {
+        if (!normalizedActiveSymbol) {
             setQuote(null);
             setLoadingQuote(false);
             return;
@@ -126,19 +130,19 @@ export default function TradeScreen() {
 
         try {
             setLoadingQuote(true);
-            const data = await apiFetch(`/markets/quote/${normalizedSymbol}`, {}, true);
+            const data = await apiFetch(`/markets/quote/${normalizedActiveSymbol}`, {}, true);
             setQuote(data?.data ?? null);
         } catch (error: any) {
             setQuote(null);
-            Alert.alert("Quote Error", error.message || "Failed to fetch live quote.");
+            throw error;
         } finally {
             setLoadingQuote(false);
         }
-    }, [normalizedSymbol]);
+    }, [normalizedActiveSymbol]);
 
-    // added: call new historical chart endpoint for the selected symbol
+    // added: call new historical chart endpoint only for active searched symbol
     const loadHistoricalData = useCallback(async () => {
-        if (!normalizedSymbol) {
+        if (!normalizedActiveSymbol) {
             setChartData([]);
             setLoadingChart(false);
             return;
@@ -146,26 +150,71 @@ export default function TradeScreen() {
 
         try {
             setLoadingChart(true);
-            const data = await apiFetch(`/market/historical/${normalizedSymbol}`, {}, true);
+            const data = await apiFetch(`/market/historical/${normalizedActiveSymbol}`, {}, true);
             setChartData(data?.chart_data ?? []);
         } catch (error: any) {
             setChartData([]);
-            Alert.alert("Chart Error", error.message || "Failed to fetch historical data.");
+            throw error;
         } finally {
             setLoadingChart(false);
         }
-    }, [normalizedSymbol]);
+    }, [normalizedActiveSymbol]);
 
-    // changed: refresh portfolio info, live quote, and chart whenever symbol changes
+    // changed: only reload automatically when the active searched symbol changes, not every keystroke
     useEffect(() => {
         loadPortfolioInfo();
-        loadLiveQuote();
-        loadHistoricalData();
+        loadLiveQuote().catch(() => {});
+        loadHistoricalData().catch(() => {});
     }, [loadPortfolioInfo, loadLiveQuote, loadHistoricalData]);
 
-    async function handleExecuteTrade() {
-        if (!normalizedSymbol) {
+    useEffect(() => {
+        if (searching && !loadingPortfolio && !loadingQuote && !loadingChart) {
+            setSearching(false);
+        }
+    }, [searching, loadingPortfolio, loadingQuote, loadingChart]);
+
+    // added: explicit search button handler so invalid partial ticker input does not spam the backend
+    async function handleSearch() {
+        if (normalizedInputSymbol === normalizedActiveSymbol) {
+            try {
+                setSearching(true);
+                await Promise.allSettled([
+                    loadPortfolioInfo(),
+                    loadLiveQuote(),
+                    loadHistoricalData(),
+                ]);
+            } finally {
+                setSearching(false);
+            }
+            return;
+        }
+
+        if (!normalizedInputSymbol) {
             Alert.alert("Missing symbol", "Please enter a stock symbol.");
+            return;
+        }
+
+        setSearching(true);
+
+        setQuote(null);
+        setChartData([]);
+        setHeldShares(0);
+
+        setLoadingPortfolio(true);
+        setLoadingQuote(true);
+        setLoadingChart(true);
+
+        setActiveSymbol(normalizedInputSymbol);
+    }
+
+    async function handleExecuteTrade() {
+        if (!symbolIsSynced) {
+            Alert.alert("Search required", "Please press Search for the ticker you entered before placing a trade.");
+            return;
+        }
+
+        if (!normalizedActiveSymbol) {
+            Alert.alert("Missing symbol", "Please search for a stock symbol first.");
             return;
         }
 
@@ -177,7 +226,7 @@ export default function TradeScreen() {
         if (mode === "SELL" && qtyNum > heldShares) {
             Alert.alert(
                 "Not enough shares",
-                `You currently hold ${heldShares} shares of ${normalizedSymbol}.`
+                `You currently hold ${heldShares} shares of ${normalizedActiveSymbol}.`
             );
             return;
         }
@@ -195,7 +244,7 @@ export default function TradeScreen() {
                 {
                     method: "POST",
                     body: JSON.stringify({
-                        symbol: normalizedSymbol,
+                        symbol: normalizedActiveSymbol,
                         qty: qtyNum,
                         side: mode.toLowerCase(), // backend requires exactly "buy" or "sell"
                     }),
@@ -205,12 +254,12 @@ export default function TradeScreen() {
 
             Alert.alert(
                 "Order submitted",
-                `${String(data.side ?? mode.toLowerCase()).toUpperCase()} ${data.qty ?? qtyNum} ${data.symbol ?? normalizedSymbol}\nStatus: ${data.order_status ?? "accepted"}`
+                `${String(data.side ?? mode.toLowerCase()).toUpperCase()} ${data.qty ?? qtyNum} ${data.symbol ?? normalizedActiveSymbol}\nStatus: ${data.order_status ?? "accepted"}`
             );
 
             // changed: refresh holdings and quote after a real trade submission
             await loadPortfolioInfo();
-            await loadLiveQuote();
+            await loadLiveQuote().catch(() => {});
         } catch (error: any) {
             Alert.alert("Trade Error", error.message || "Failed to submit order.");
         } finally {
@@ -299,8 +348,8 @@ export default function TradeScreen() {
                     <View style={{ flex: 1 }}>
                         <Text style={styles.inputLabel}>Symbol</Text>
                         <TextInput
-                            value={symbol}
-                            onChangeText={(text) => setSymbol(text.toUpperCase())}
+                            value={symbolInput}
+                            onChangeText={(text) => setSymbolInput(text.toUpperCase())}
                             autoCapitalize="characters"
                             autoCorrect={false}
                             spellCheck={false}
@@ -308,6 +357,17 @@ export default function TradeScreen() {
                             placeholder="AAPL"
                             placeholderTextColor="rgba(11,43,34,0.45)"
                         />
+
+                        {/* added: explicit search button so backend only checks after user clicks it */}
+                        <Pressable
+                            style={[styles.searchBtn, searching && { opacity: 0.7 }]}
+                            onPress={handleSearch}
+                            disabled={searching}
+                        >
+                            <Text style={styles.searchBtnText}>
+                                {searching ? "SEARCHING..." : "SEARCH"}
+                            </Text>
+                        </Pressable>
                     </View>
 
                     <View style={styles.stockInfoRight}>
@@ -342,7 +402,7 @@ export default function TradeScreen() {
                 <View style={styles.chartCard}>
                     <View style={styles.chartTopRow}>
                         {/* changed: now shows real symbol title and simple percentage change */}
-                        <Text style={styles.chartTitle}>{normalizedSymbol || "Ticker"} Price History</Text>
+                        <Text style={styles.chartTitle}>{normalizedActiveSymbol || "Ticker"} Price History</Text>
                         <Text style={styles.chartSmallLabel}>
                             {chartChangePct != null
                                 ? `${chartChangePct >= 0 ? "+" : ""}${chartChangePct.toFixed(2)}%`
@@ -507,17 +567,19 @@ export default function TradeScreen() {
                     style={[
                         styles.executeBtn,
                         mode === "SELL" && styles.executeBtnSell,
-                        submitting && { opacity: 0.7 },
+                        (submitting || !symbolIsSynced) && { opacity: 0.7 },
                     ]}
                     onPress={handleExecuteTrade}
-                    disabled={submitting}
+                    disabled={submitting || !symbolIsSynced}
                 >
                     <Text style={styles.executeText}>
-                        {submitting
-                            ? "SUBMITTING..."
-                            : mode === "BUY"
-                                ? `BUY ${normalizedSymbol || "STOCK"}`
-                                : `SELL ${normalizedSymbol || "STOCK"}`}
+                        {!symbolIsSynced
+                            ? "PRESS SEARCH FIRST"
+                            : submitting
+                                ? "SUBMITTING..."
+                                : mode === "BUY"
+                                    ? `BUY ${normalizedActiveSymbol || "STOCK"}`
+                                    : `SELL ${normalizedActiveSymbol || "STOCK"}`}
                     </Text>
                 </Pressable>
             </ScrollView>
@@ -580,6 +642,20 @@ const styles = StyleSheet.create({
         fontWeight: "900",
         color: "#0b2b22",
         minWidth: 110,
+    },
+    // added: explicit search button styles
+    searchBtn: {
+        marginTop: 10,
+        backgroundColor: "#1B7A61",
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: "center",
+    },
+    searchBtnText: {
+        color: "#fff",
+        fontWeight: "900",
+        fontSize: 14,
+        letterSpacing: 0.5,
     },
     stockInfoRight: {
         alignItems: "flex-end",
