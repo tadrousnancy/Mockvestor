@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, Pressable, TextInput } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { SafeAreaView, View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+// risk banner
+import RiskWarningBanner from "../../components/education/RiskWarningBanner";
 
 const GREEN = "#2FD59B";
 const DARK_GREEN = "#1B7A61";
@@ -15,6 +18,7 @@ export default function TradeScreen() {
   const [range, setRange] = useState<RangeKey>("1W");
   const [mode, setMode] = useState<TradeMode>("SELL");
   const [quantity, setQuantity] = useState("1.0");
+  const [warningDismissed, setWarningDismissed] = useState(false);
 
   const ticker = "AAPL";
   const price = 182.64;
@@ -28,9 +32,62 @@ export default function TradeScreen() {
 
   const estimatedCost = Number(quantity || 0) * price;
 
+  // trade impact indicator 
+  const tradeImpact = useMemo(() => {
+    const qty = Number(quantity || 0);
+    if (qty === 0) return null;
+  
+    // % of buying power used
+    const usage = estimatedCost / buyingPower;
+  
+    if (usage >= 0.8 || qty >= 10) {
+      return "High";
+    } else if (usage >= 0.4 || qty >= 5) {
+      return "Moderate";
+    } else {
+      return "Low";
+    }
+  }, [quantity, estimatedCost, buyingPower]);
+
+  // risk warning banner messages 
+  const riskWarningMessage = useMemo(() => {
+    const qty = Number(quantity || 0);
+  
+    if (mode === "BUY") {
+      if (estimatedCost >= buyingPower * 0.8) {
+        return "This trade would use most of your buying power, leaving you with less flexibility for future trades.";
+      } else if (qty >= 5) {
+        return "This purchase increases concentration in one stock, which raises risk if that company performs poorly.";
+      } else if (qty >= 3) {
+        return "Adding more to the same position reduces diversification by making your portfolio rely more heavily on one asset.";
+      }
+    }
+  
+    if (mode === "SELL") {
+      if (qty >= 10) {
+        return "This sale may significantly reduce your exposure to this stock and shift your portfolio allocation.";
+      } else if (qty >= 5) {
+        return "Selling a large portion of one holding can change diversification and alter the balance of your portfolio.";
+      } else if (qty > 0) {
+        return "This trade increases available buying power, but it may also reduce your investment in a position that was supporting portfolio growth.";
+      }
+    }
+  
+    return null;
+  }, [mode, quantity, estimatedCost, buyingPower]);
+
+  useEffect(() => {
+    setWarningDismissed(false);
+  }, [mode, quantity]);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+
         {/* header */}
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
@@ -121,6 +178,13 @@ export default function TradeScreen() {
           </Pressable>
         </View>
 
+        {/* risk banner */}
+        {riskWarningMessage && !warningDismissed && (
+            <RiskWarningBanner message={riskWarningMessage}
+            onClose={() => setWarningDismissed(true)}
+            />
+        )}
+
         {/* quantity */}
         <View style={styles.quantityCard}>
           <Text style={styles.quantityLabel}>Quantity</Text>
@@ -177,6 +241,38 @@ export default function TradeScreen() {
             <Text style={styles.reviewValue}>{quantity}</Text>
           </View>
         </View>
+        
+        {tradeImpact && (
+            <View style={styles.impactPill}>
+                <Text style={styles.impactTitle}>Trade Impact: {tradeImpact} </Text>
+                <View style={styles.dotRow}>
+                    {[1, 2, 3, 4, 5].map((i) => {
+                        let activeCount = 0;
+                        if (tradeImpact === "Low") activeCount = 2;
+                        if (tradeImpact === "Moderate") activeCount = 3;
+                        if (tradeImpact === "High") activeCount = 5;
+                        
+                        return (
+                          <View
+                            key={i}
+                            style={[
+                              styles.dot,
+                              i <= activeCount && {
+                                backgroundColor:
+                                  tradeImpact === "Low"
+                                    ? "#2FD59B"
+                                    : tradeImpact === "Moderate"
+                                    ? "#FFD166"
+                                    : "#ff4d7d",
+                              },
+                            ]}
+                          />
+                        );
+                    })}
+                </View>
+            </View>
+        )}
+        
 
         {/* execute button */}
         <Pressable
@@ -188,6 +284,7 @@ export default function TradeScreen() {
           </Text>
         </Pressable>
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -206,7 +303,8 @@ function formatPct(x: number) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
-  container: { flex: 1, paddingHorizontal: 18, paddingTop: 10 },
+  container: { paddingHorizontal: 18, paddingTop: 10 },
+  scrollContent: { paddingBottom: 24},
 
   headerRow: {
     width: "100%",
@@ -399,6 +497,35 @@ const styles = StyleSheet.create({
   reviewValue: {
     color: "#fff",
     fontWeight: "900",
+  },
+
+  impactPill: {
+    marginTop: 10,
+    marginBottom: 10,
+    backgroundColor: "#111",
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: "center",
+  },
+  
+  impactTitle: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  
+  dotRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
 
   executeBtn: {
