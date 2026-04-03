@@ -273,9 +273,9 @@ results_5d, model_5d = walk_forward(df, features, "target_5d", "5d")
 results_21d, model_21d = walk_forward(df, features, "target_21d", "21d")
 
 # save model
-joblib.dump(model_1d, "../models/LGBM_1d.pk1")
-joblib.dump(model_5d, "../models/LGBM_5d.pk1")
-joblib.dump(model_21d, "../models/LGBM_21d.pk1")
+joblib.dump(model_1d, "../models/LGBM_1d.pkl")
+joblib.dump(model_5d, "../models/LGBM_5d.pkl")
+joblib.dump(model_21d, "../models/LGBM_21d.pkl")
 
 # feature debugging
 # fig, axes = plt.subplots(1, 3, figsize=(24, 8))
