@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, Pressable, FlatList } from "react-native";
+import { SafeAreaView, View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -7,6 +7,9 @@ const GREEN = "#2FD59B"
 const DARK_GREEN = "#1B7A61";
 const BG = "#F4F4F4";
 const BLACK = "#0b0b0b";
+
+// placeholder value for daily streak
+const streakCount = 3;
 
 type Holding = {
   symbol: string;
@@ -38,12 +41,22 @@ const HOLDINGS: Holding[] = [
   
     return (
         <SafeAreaView style={styles.safe}>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
           <View style={styles.container}>
             {/* header */}
             <View style={styles.headerRow}>
               <View style={styles.brandRow}>
                 <Ionicons name="trending-up" size={26} color={DARK_GREEN} />
                 <Text style={styles.brand}>MOCKVESTOR</Text>
+              </View>
+
+              <View style={styles.headerRight}>
+                <View style={styles.streakMini}>
+                  <Ionicons name="flame" size={25} color={DARK_GREEN} />
+                  <Text style={styles.streakMiniText}>{streakCount}</Text>
               </View>
     
               <Pressable
@@ -53,7 +66,9 @@ const HOLDINGS: Holding[] = [
               >
                 <Ionicons name="person-circle-outline" size={30} color={DARK_GREEN} />
               </Pressable>
+              </View>
             </View>
+
     
             {/* portfolio value card */}
             <View style={styles.portfolioCard}>
@@ -113,13 +128,11 @@ const HOLDINGS: Holding[] = [
             </View>
     
             {/* holdings list */}
-            <FlatList
-              data={HOLDINGS}
-              keyExtractor={(item) => item.symbol}
-              contentContainerStyle={{ paddingBottom: 14 }}
-              renderItem={({ item }) => <HoldingRow item={item} />}
-              style={{ width: "100%" }}
-            />
+            <View style={{ width: "100%" }}>
+                {HOLDINGS.map((item) => (
+                    <HoldingRow key={item.symbol} item={item} />
+                    ))}
+            </View>
     
             {/* trade button */}
             <Pressable
@@ -129,6 +142,7 @@ const HOLDINGS: Holding[] = [
               <Text style={styles.tradeText}>TRADE</Text>
             </Pressable>
           </View>
+          </ScrollView>
         </SafeAreaView>
       );
     }
@@ -172,7 +186,7 @@ const HOLDINGS: Holding[] = [
       
       const styles = StyleSheet.create({
         safe: { flex: 1, backgroundColor: BG },
-        container: { flex: 1, paddingHorizontal: 18, paddingTop: 10 },
+        container: { paddingHorizontal: 18, paddingTop: 10 },
       
         headerRow: {
           width: "100%",
@@ -181,6 +195,9 @@ const HOLDINGS: Holding[] = [
           justifyContent: "space-between",
           marginBottom: 12,
         },
+        scrollContent: {
+            paddingBottom: 24,
+          },
         brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
         brand: {
           fontSize: 24,
@@ -310,6 +327,23 @@ const HOLDINGS: Holding[] = [
           marginTop: 6,
           marginBottom: 16,
         },
+        headerRight: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          },
+          
+          streakMini: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+          },
+          
+          streakMiniText: {
+            color: DARK_GREEN,
+            fontSize: 20,
+            fontWeight: "900",
+          },
         tradeText: { fontSize: 24, fontWeight: "900", letterSpacing: 1, color: "#0b2b22" },
       });
     

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SafeAreaView, View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import GameFeedbackPopup from "@/components/game/GameFeedbackPopup";
 
 // risk banner
 import RiskWarningBanner from "../../components/education/RiskWarningBanner";
@@ -10,6 +11,9 @@ const DARK_GREEN = "#1B7A61";
 const BG = "#F4F4F4";
 const BLACK = "#0b0b0b";
 const SELL_PINK = "#ff4d7d";
+
+// placeholder value for daily streak 
+const streakCount = 3;
 
 type RangeKey = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD";
 type TradeMode = "BUY" | "SELL";
@@ -88,6 +92,9 @@ export default function TradeScreen() {
       >
         <View style={styles.container}>
 
+        {/* game feedback popup placeholder */}
+        <GameFeedbackPopup message="+10 XP" visible={false} />
+
         {/* header */}
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
@@ -95,9 +102,16 @@ export default function TradeScreen() {
             <Text style={styles.brand}>MOCKVESTOR</Text>
           </View>
 
+          <View style={styles.headerRight}>
+            <View style={styles.streakMini}>
+                <Ionicons name="flame" size={25} color={DARK_GREEN} />
+                <Text style={styles.streakMiniText}>{streakCount}</Text>
+                </View>
+
           <Pressable onPress={() => console.log("profile pressed")} hitSlop={10}>
             <Ionicons name="person-circle-outline" size={30} color={DARK_GREEN} />
           </Pressable>
+          </View>
         </View>
 
         {/* stock header card */}
@@ -544,5 +558,22 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "900",
     letterSpacing: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  
+  streakMini: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  
+  streakMiniText: {
+    color: DARK_GREEN,
+    fontSize: 20,
+    fontWeight: "900",
   },
 });
