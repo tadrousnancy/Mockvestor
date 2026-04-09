@@ -62,33 +62,6 @@ class Feedback:
         :param X_test: data the model made predictions on
         :return feats_1d, feats_5d, feats_21d: feature labels for each prediction:
             e.g. ["Return Since Yesterday", "Overnight Gap", "Volume Ratio"]
-
-            UI structure:
-                Tomorrow:
-                    Expected Volatility: X%
-                    Expected Range: $Y - $Z
-                    Determined by these factors:
-                        {feats_1d[0]}
-                        {feats_1d[1]}
-                        {feats_1d[2]}
-
-                1 Week From Now:
-                    Expected Volatility: X%
-                    Expected Range: $Y - $Z
-                    Determined by these factors:
-                        {feats_5d[0]}
-                        {feats_5d[1]}
-                        {feats_5d[2]}
-
-                1 Month From Now:
-                    Expected Volatility: X%
-                    Expected Range: $Y - $Z
-                    Determined by these factors:
-                        {feats_21d[0]}
-                        {feats_21d[1]}
-                        {feats_21d[2]}
-
-                Overall Risk: [Low, Medium, High, Very High]
         """
 
         # create explainer objects
@@ -124,9 +97,9 @@ class Feedback:
 
         :param ticker: the stock the user just traded
         :return future_preds: dictionary listing the stock's expected volatility and range N days in the future
-            e.g. {"1d": [volatility, low, high],
-                  "5d": [volatility, low, high],
-                  "21d": [volatility, low, high]}
+            e.g. {"1d": [volatility, low, high, vol_elevation],
+                  "5d": [volatility, low, high, vol_elevation],
+                  "21d": [volatility, low, high, vol_elevation]}
         :return risk_level: overall riskiness of a trade (Low, Medium, High, or Very High)
         """
 
@@ -167,6 +140,7 @@ class Feedback:
         print(f"Date: {trading_date}")
         print("----------------------")
 
+        i = 0
         total_points = 0
         future_preds = {"1d": [vol_1d],
                         "5d": [vol_5d],
@@ -180,7 +154,6 @@ class Feedback:
             future_preds[label][0] = move
             future_preds[label].append(low)
             future_preds[label].append(high)
-            print(f"{label} Expected Volatility: {move:.2%} | Expected Range: ${low:.2f} - ${high:.2f}")
 
             # allocate points (riskiness) for each prediction
                 # 1 - low, 2 - medium, 3 - high, 4 - very high
@@ -193,24 +166,36 @@ class Feedback:
             day_range = thresholds[label]
             if move < day_range[0]:
                 total_points += weight[label]
+                level = "Low"
             elif (move >= day_range[0]) and (move < day_range[1]):
                 total_points += 2 * weight[label]
+                level = "Moderate"
             elif (move >= day_range[1]) and (move < day_range[2]):
                 total_points += 3 * weight[label]
+                level = "High"
             else:
                 total_points += 4.0 * weight[label]
+                level = "Very High"
+            future_preds[label].append(level)
 
-        print("----------------------")
+            print(f"{label} Expected Volatility: {move:.2%} ({level}) | Expected Range: ${low:.2f} - ${high:.2f}")
+            print(f"Determined By: {top_features[i][0]}")
+            print(f"               {top_features[i][1]}")
+            print(f"               {top_features[i][2]}")
+            print("----------------------")
+            i += 1
 
         # determine risk factor based on total points
-        if total_points <= 1:
+        if total_points < 2:
             risk_level = "Low"
-        elif (total_points > 1) and (total_points <= 2):
-            risk_level = "Medium"
-        elif (total_points > 2) and (total_points <= 3):
+        elif (total_points >= 2) and (total_points < 3):
+            risk_level = "Moderate"
+        elif (total_points >= 3) and (total_points < 4):
             risk_level = "High"
         else:
             risk_level = "Very High"
+
+        print(f"Risk Level: {risk_level}\n")
 
         return future_preds, risk_level, top_features
 
@@ -220,9 +205,34 @@ class Feedback:
 #     feedback = Feedback()
 #     preds, risk, top = feedback.predict_risk("AAPL")
 #
-#     print(f"Risk Level: {risk}\n")
-#     j = 0
 #     for i in preds:
-#         print(i, preds[i])
-#         print("\t", top[j], "\n")
-#         j += 1
+#         print(i, " ", preds[i])
+
+"""
+Example UI structure:
+    Tomorrow:
+        Expected Volatility: X% (Low, Moderate, High, Very High)
+        Expected Range: $Y - $Z
+        Determined by these factors:
+            top_features[0][0]
+            top_features[0][1]
+            top_features[0][2]
+
+    1 Week From Now:
+        Expected Volatility: X% (Low, Moderate, High, Very High)
+        Expected Range: $Y - $Z
+        Determined by these factors:
+            top_features[1][0]
+            top_features[1][1]
+            top_features[1][2]
+
+    1 Month From Now:
+        Expected Volatility: X% (Low, Moderate, High, Very High)
+        Expected Range: $Y - $Z
+        Determined by these factors:
+            top_features[2][0]
+            top_features[2][1]
+            top_features[2][2]
+
+    Overall Risk: [Low, Moderate, High, Very High]
+"""
