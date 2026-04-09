@@ -186,16 +186,16 @@ class Feedback:
             i += 1
 
         # determine risk factor based on total points
-        if total_points < 2:
+        if total_points < 1.75:
             risk_level = "Low"
-        elif (total_points >= 2) and (total_points < 3):
+        elif (total_points >= 1.75) and (total_points < 2.5):
             risk_level = "Moderate"
-        elif (total_points >= 3) and (total_points < 4):
+        elif (total_points >= 2.5) and (total_points < 3.25):
             risk_level = "High"
         else:
             risk_level = "Very High"
 
-        print(f"Risk Level: {risk_level}\n")
+        print(f"Risk Level: {risk_level} | {total_points} / 4 \n")
 
         return future_preds, risk_level, top_features
 
