@@ -8,7 +8,8 @@ from alpaca.broker.enums import AgreementType, TaxIdType, BankAccountType, Trans
 from src.core.broker_config import get_broker_client, get_data_client
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.data.requests import StockLatestQuoteRequest
+from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest
+from datetime import date, timedelta
 
 ticker_path = Path(__file__).parent / "tickers.csv"
 

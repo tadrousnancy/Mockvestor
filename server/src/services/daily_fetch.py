@@ -5,6 +5,8 @@ import uuid
 import time
 import traceback
 import requests
+import yfinance as yf
+import pandas as pd
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -42,13 +44,20 @@ class DailyMarketSummary(SQLModel, table=True):
     unix_timestamp: Optional[int]
     created_at: Optional[datetime] = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
 
+class TickerMetadata(SQLModel, table=True):
+    __tablename__ = "ticker_metadata"
+
+    ticker: str = Field(primary_key=True)
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    market_cap: Optional[float] = None
+
 
 #-------------------------------------------------------------
 # Environment & Database Setup
 #-------------------------------------------------------------
 # set path to .env file
-env_path = Path(__file__).parent.parent / "core" / ".env"
-
+env_path = Path(__file__).parent.parent / ".env"
 # load .env file
 load_dotenv(dotenv_path=env_path)
 
@@ -239,35 +248,145 @@ def get_historical_chart_data(db: Session, ticker: str):
         print(f"DB QUERY ERROR: {str(e)}")
         raise e
 
+def sync_vix(target_date: str):
+    """
+    Add the Cboe Volatility Index to the database (for LightGBM)
+    Current Massive plan does not support VIX, so Yahoo Finance is used
+    """
+
+    end_date = (date.fromisoformat(target_date) + timedelta(days=1)).isoformat()
+
+    vix = yf.download("^VIX", start=target_date, end=end_date, progress=False, timeout=3)
+    if vix.empty:
+        print(f"No VIX data for {target_date}")
+        return
+
+    if isinstance(vix.columns, pd.MultiIndex):
+        vix.columns = vix.columns.get_level_values(0)
+
+    row = vix.iloc[0]
+    data_to_insert = [
+        {
+            "ticker": "VIX",
+            "trading_date": date.fromisoformat(target_date),
+            "open_price": Decimal(str(round(float(row["Open"]), 4))),
+            "high_price": Decimal(str(round(float(row["High"]), 4))),
+            "low_price": Decimal(str(round(float(row["Low"]), 4))),
+            "close_price": Decimal(str(round(float(row["Close"]), 4))),
+            "volume": 0,
+            "vwap": None,
+            "num_transactions": None,
+            "is_otc": False,
+            "unix_timestamp": None
+        }
+    ]
+
+    with Session(engine) as session:
+        stmt = insert(DailyMarketSummary).values(data_to_insert)
+        upsert_stmt = stmt.on_conflict_do_update(
+            constraint="market_data_unique_row",
+            set_={
+                "open_price": stmt.excluded.open_price,
+                "high_price": stmt.excluded.high_price,
+                "low_price": stmt.excluded.low_price,
+                "close_price": stmt.excluded.close_price
+            }
+        )
+        session.execute(upsert_stmt)
+        session.commit()
+        print(f"VIX synced for {target_date}")
+
+def populate_ticker_metadata():
+    with Session(engine) as session:
+        existing = session.exec(select(TickerMetadata.ticker)).all()
+        existing_tickers = set(existing)
+
+    # only check for new tickers
+    approved_tickers = load_approved_tickers("tickers.csv")
+    print(approved_tickers)
+    new_tickers = [t for t in approved_tickers if t not in existing_tickers]
+    if not new_tickers:
+        print("No new tickers to populate")
+        return
+
+    with Session(engine) as session:
+        for ticker in new_tickers:
+            try:
+                url = f"https://api.massive.com/v3/reference/tickers/{ticker}"
+                response = requests.get(url, params={"apiKey": massive})
+                result = response.json()
+                data = result.get("results", None)
+                if data is None:
+                    print(f"No data found for {ticker}")
+                    continue
+
+                session.add(TickerMetadata(
+                    ticker=ticker,
+                    sector=data.get("sic_description", None),
+                    industry=data.get("sic_code", None),
+                    market_cap=data.get("market_cap", None)
+                ))
+                print(f"{ticker} added successfully")
+            except Exception as e:
+                print(f"Failed {ticker}: {e}")
+        session.commit()
+        print("Complete")
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        date_to_sync = sys.argv[1]
+        if sys.argv[1] == "populate_metadata":
+            print("Populating ticker metadata")
+            populate_ticker_metadata()
+        else:
+            date_to_sync = sys.argv[1]
+            print(f"Executing daily automated sync for date: {date_to_sync}")
+            sync_data(date_to_sync)
+            sync_vix(date_to_sync)
     else:
         date_to_sync = (date.today() - timedelta(days=1)).isoformat()
 
     print(f"Executing daily automated sync for date: {date_to_sync}")
     sync_data(date_to_sync)
+    sync_vix(date_to_sync)
+
+#if __name__ == "__main__":
+#    if len(sys.argv) > 1:
+#        if sys.argv[1] == "populate_metadata":
+#            print("Populating ticker metadata")
+#            populate_ticker_metadata()
+#        else:
+#            date_to_sync = sys.argv[1]
+#            print(f"Executing daily automated sync for date: {date_to_sync}")
+#            sync_data(date_to_sync)
+#            sync_vix(date_to_sync)
+#    else:
+#        date_to_sync = (date.today() - timedelta(days=1)).isoformat()
+#        print(f"Executing daily automated sync for date: {date_to_sync}")
+#        sync_data(date_to_sync)
 
     #date_to_sync = date.today().isoformat()
     #print(f"Executing daily automated sync for date: {date_to_sync}")
     #sync_data(date_to_sync)
 #-------------------------------------------------------------
-# Previously used block to fill in 2 years worth of data
+# Previously used block to fill in 7 years worth of data
 #-------------------------------------------------------------
-    #today = date.today()
-    #start_date = today - timedelta(days=2*365 + (1 if today.month > 2 and today.year % 4 == 0 else 0))
-    #two_years_ago = date(today.year - 2, today.month, today.day)
-    #one_day = timedelta(days=1)
-    #current_date = start_date
-    #count = 0
+    # today = date.today()
+    # start_date = today - timedelta(days=7*365 + (1 if today.month > 2 and today.year % 4 == 0 else 0))
+    # seven_years_ago = date(today.year - 7, today.month, today.day)
+    # one_day = timedelta(days=1)
+    # current_date = start_date
+    # count = 0
     #
-    #while current_date <= today:
-    #    print(f"Running data sync for {str(current_date)}...")
-    #    sync_data(str(current_date))
+    # while current_date <= today:
+    #     print(f"Running data sync for {str(current_date)}...")
+    #     sync_vix(str(current_date))
     #
-    #    current_date += one_day
-    #    count += 1
+    #     current_date += one_day
+    #     count += 1
     #
     #    if count == 5:
     #        time.sleep(60)
     #        count = 0
+    #     # if count == 5:
+    #     #     time.sleep(60)
+    #     #     count = 0

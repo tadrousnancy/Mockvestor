@@ -34,7 +34,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests sqlmodel sqlalchemy psycopg2-binary python-dotenv
+          pip install requests sqlmodel sqlalchemy psycopg2-binary python-dotenv yfinance pandas
       
       # run the python script with the injected secrets
       - name: Execute Daily Fetch Script

@@ -2,3 +2,4 @@ python-dotenv
 alpaca-py
 fastapi[standard]
 psycopg2
+yfinance
