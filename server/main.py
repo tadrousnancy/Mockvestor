@@ -133,8 +133,8 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         # Something crashed somwhere
-        logger.info(f"HTTP Exception: Status Code 500 - Internal Server Error")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        logger.info(f"HTTP Exception: Status Code 500 - Internal Server Error - {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error - {str(e)}. Check logs for more details")
 
 class UserLogin(BaseModel):
     username: str
@@ -215,7 +215,7 @@ async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session 
 
     except Exception as e:
         logger.info(f"DEPOSIT ERROR: {str(e)}")
-        raise HTTPException(status_code=502, detail="Transfer failed")
+        raise HTTPException(status_code=502, detail=f"Transfer failed. Check logs for more details.")
 
 @app.get("/accounts/{user_id}/portfolio")
 async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
@@ -257,7 +257,7 @@ async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_use
         logger.info(f"PORTFOLIO ERROR: {str(e)}...failed to fetch portfolio data.")
         raise HTTPException(
             status_code=502,
-            detail="Failed to fetch portfolio data"
+            detail="Failed to fetch portfolio data. Check logs for more details"
         )
 
 class OrderRequest(BaseModel):
