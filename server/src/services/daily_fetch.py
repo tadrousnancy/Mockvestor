@@ -57,7 +57,7 @@ class TickerMetadata(SQLModel, table=True):
 # Environment & Database Setup
 #-------------------------------------------------------------
 # set path to .env file
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent / "core" / ".env"
 # load .env file
 load_dotenv(dotenv_path=env_path)
 

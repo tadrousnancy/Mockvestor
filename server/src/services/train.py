@@ -2,9 +2,9 @@ import lightgbm as lgb
 import pandas as pd
 import numpy as np
 import joblib
-from daily_fetch import engine
+from src.services.daily_fetch import engine
 from sklearn.metrics import mean_squared_error, r2_score
-from features import Features
+from src.services.features import Features
 
 # ---------- Fetching Market Data ---------- #
 

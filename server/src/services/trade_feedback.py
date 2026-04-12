@@ -2,9 +2,10 @@ import joblib
 import pandas as pd
 import numpy as np
 import shap
-from daily_fetch import engine
+from pathlib import Path
+from src.services.daily_fetch import engine
 from sqlalchemy import text
-from features import Features
+from src.services.features import Features
 
 
 def sort_by_importance(shap_values):
@@ -23,9 +24,15 @@ def sort_by_importance(shap_values):
 
 class Feedback:
     def __init__(self):
-        self.model_1d = joblib.load("../models/LGBM_1d.joblib")
-        self.model_5d = joblib.load("../models/LGBM_5d.joblib")
-        self.model_21d = joblib.load("../models/LGBM_21d.joblib")
+        oneDay_model_path = Path(__file__).parent.parent / "models" / "LGBM_1d.joblib"
+        fiveDay_model_path = Path(__file__).parent.parent / "models" / "LGBM_5d.joblib"
+        twentyOneDay_model_path = Path(__file__).parent.parent / "models" / "LGBM_21d.joblib"
+        #self.model_1d = joblib.load("../models/LGBM_1d.joblib")
+        #self.model_5d = joblib.load("../models/LGBM_5d.joblib")
+        #self.model_21d = joblib.load("../models/LGBM_21d.joblib")
+        self.model_1d = joblib.load(oneDay_model_path)
+        self.model_5d = joblib.load(fiveDay_model_path)
+        self.model_21d = joblib.load(twentyOneDay_model_path)
         self.feature_labels = {
             "return_1d": "Return Since Yesterday",
             "return_5d": "Return Since Last Week",

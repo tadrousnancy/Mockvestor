@@ -12,6 +12,7 @@ from src.auth.Account import Account
 from fastapi.middleware.cors import CORSMiddleware
 from src.auth.jwt_handler import create_access_token, get_current_user_id
 from src.services.daily_fetch import get_historical_chart_data
+from src.services.trade_feedback import Feedback
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -328,11 +329,39 @@ async def fetch_live_quote(
     ticker: str,
     current_user_id: str = Depends(get_current_user_id)
 ):
+    trade_feedback = Feedback()
     try:
         quote_data = get_live_quote(ticker)
+        risk_pred, risk_level, risk_base = trade_feedback.predict_risk(ticker)
+        day_risk = risk_pred['1d'][3]
+        day_vol = f"{risk_pred['1d'][0]:.2%}"
+        day_expLow = f"{risk_pred['1d'][1]:.2f}"
+        day_expHigh = f"{risk_pred['1d'][2]:.2f}"
+        week_risk = risk_pred['5d'][3]
+        week_vol = f"{risk_pred['5d'][0]:.2%}"
+        week_expLow = f"{risk_pred['5d'][1]:.2f}"
+        week_expHigh = f"{risk_pred['5d'][2]:.2f}"
+        month_risk = risk_pred['21d'][3]
+        month_vol = f"{risk_pred['21d'][0]:.2%}"
+        month_expLow = f"{risk_pred['21d'][1]:.2f}"
+        month_expHigh = f"{risk_pred['21d'][2]:.2f}"
+
         return {
             "status": "success",
-            "data": quote_data
+            "data": quote_data,
+            "day_risk": day_risk,
+            "day_vol": day_vol,
+            "day_exp_low": day_expLow,
+            "day_exp_high": day_expHigh,
+            "week_risk": week_risk,
+            "week_vol": week_vol,
+            "week_exp_low": week_expLow,
+            "week_exp_high": week_expHigh,
+            "month_risk": month_risk,
+            "month_vol": month_vol,
+            "month_exp_low": month_expLow,
+            "month_exp_high": month_expHigh,
+            "risk_level": risk_level
         }
     except Exception as e:
         raise HTTPException(
