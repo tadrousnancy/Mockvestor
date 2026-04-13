@@ -11,6 +11,10 @@ const DARK_GREEN = "#1B7A61";
 const BG = "#F4F4F4";
 const BLACK = "#0b0b0b";
 
+
+// placeholder value for daily streak
+const streakCount = 3;
+
 type Holding = {    symbol: string;
     shares: number;
     market_value: number;
@@ -47,7 +51,10 @@ export default function TabIndex() {
   const rangeButtons: RangeKey[] = useMemo(
       () => ["1D", "1W", "1M", "3M", "6M", "YTD"],
       []
-  );    // add the fetch function
+    );
+  
+  
+  // add the fetch function
   const loadPortfolio = useCallback(async () => {
       try {
           setLoading(true);
@@ -125,13 +132,21 @@ export default function TabIndex() {
 
   return (
       <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.container}>
             {/* header */}
             <View style={styles.headerRow}>
               <View style={styles.brandRow}>
                 <Ionicons name="trending-up" size={26} color={DARK_GREEN} />
                 <Text style={styles.brand}>MOCKVESTOR</Text>
+              </View>
+
+              <View style={styles.headerRight}>
+                <View style={styles.streakMini}>
+                  <Ionicons name="flame" size={25} color={DARK_GREEN} />
+                  <Text style={styles.streakMiniText}>{streakCount}</Text>
               </View>
     
               <Pressable
@@ -141,7 +156,9 @@ export default function TabIndex() {
               >
                 <Ionicons name="person-circle-outline" size={30} color={DARK_GREEN} />
               </Pressable>
+              </View>
             </View>
+
     
             {/* portfolio value card. updated to use real backend data instead of placeholders */}
             <View style={styles.portfolioCard}>
@@ -204,6 +221,7 @@ export default function TabIndex() {
             </View>
 
             {/* holdings list */}
+
             <FlatList
                 data={holdings}
                 keyExtractor={(item) => item.symbol}
@@ -261,6 +279,7 @@ function HoldingRow({ item }: { item: Holding }) {
 
     return (
         <View style={styles.holdingRow}>
+
             <View style={styles.symbolPill}>
                 <Text style={styles.symbolText}>{item.symbol}</Text>
             </View>
@@ -410,6 +429,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
+  
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  streakMini: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  streakMiniText: {
+    color: DARK_GREEN,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  
   rangeBtn: {
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -430,6 +468,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
+ 
   sectionTitle: { fontSize: 16, fontWeight: "900", color: "#0b2b22" },
 
   holdingRow: {
