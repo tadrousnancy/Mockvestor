@@ -1,7 +1,7 @@
 from pypfopt import EfficientFrontier, risk_models, expected_returns
 from pypfopt.discrete_allocation import DiscreteAllocation, get_latest_prices
-from daily_fetch import DailyMarketSummary as DMS, engine
-from sqlmodel import Session, select, col
+from daily_fetch import engine
+from sqlmodel import text
 import pandas as pd
 
 
@@ -13,16 +13,17 @@ def get_market_data(holdings):
     """
 
     # query for current holdings
-    statement = (select(DMS.trading_date, DMS.ticker, DMS.close_price)
-                 .where(col(DMS.ticker).in_(holdings)))
-    with Session(engine) as session:
-        results = session.exec(statement).all()
-
-    # convert results into a compatible df
-    df = pd.DataFrame(results, columns=["trading_date", "ticker", "close_price"])
+    query = text("""
+        SELECT trading_date, ticker, close_price 
+        FROM daily_market_summaries
+        WHERE ticker IN :holdings
+            AND trading_date >= NOW() - INTERVAL '4 years'
+    """)
+    df = pd.read_sql(query, engine, params={"holdings": tuple(holdings)})
     prices = (df.pivot(index="trading_date", columns="ticker", values="close_price")
               .sort_index()
-              .astype(float))
+              .astype(float)
+              .dropna())
     return prices
 
 
@@ -51,14 +52,12 @@ def optimize_portfolio(prices, portfolio_value):
         S = risk_models.sample_cov(prices)
 
         # maximize sharpe ratio
-        ef = EfficientFrontier(mu, S)
-        ef.max_sharpe()
+        ef = EfficientFrontier(mu, S, weight_bounds=(0.10, 0.4))
+        ef.min_volatility()
 
         # clean weights
         cleaned_weights = ef.clean_weights()
 
-        # print results (for debugging)
-        ef.portfolio_performance(verbose=True)
     except Exception as e:
         raise ValueError(f"Optimization failed: {e}") from e
 
@@ -76,3 +75,19 @@ def optimize_portfolio(prices, portfolio_value):
         }
 
     return total_allocation, leftover
+
+
+# debugging
+# if __name__ == '__main__':
+#     holdings = ["NVDA", "AAPL", "QQQ", "ORCL", "SPY", "NFLX", "LLY"]
+#     df = get_market_data(holdings)
+#     total, remainder = optimize_portfolio(df, 50000)
+#
+#     print("-------------------------------------------")
+#     print("Recommendation:")
+#     print("-------------------------------------------")
+#     for i in total:
+#         print(i, total[i])
+#     print("-------------------------------------------")
+#     print(f"Leftover: ${remainder}")
+#     print("-------------------------------------------")
