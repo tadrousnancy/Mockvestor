@@ -1,6 +1,6 @@
 from pypfopt import EfficientFrontier, risk_models, expected_returns
 from pypfopt.discrete_allocation import DiscreteAllocation, get_latest_prices
-from daily_fetch import engine
+from src.services.daily_fetch import engine
 from sqlmodel import text
 import pandas as pd
 

@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 from src.core.logger import logger
-from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_value, submit_mock_order, get_live_quote
+from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_positions, get_portfolio_value, submit_mock_order, get_live_quote
 from src.services.database import create_db_and_tables, get_db
 from src.models.user import User
 from src.models.transaction import Transaction
@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.auth.jwt_handler import create_access_token, get_current_user_id
 from src.services.daily_fetch import get_historical_chart_data
 from src.services.trade_feedback import Feedback
+from src.services.portfolio import get_market_data, optimize_portfolio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -246,11 +247,26 @@ async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_use
         portfolio_data = get_portfolio_value(db_user.alpaca_account_id)
         holdings_data = get_account_holdings(db_user.alpaca_account_id)
 
+        if (holdings_data['position_count'] >= 2):
+            
+            # Begin Portfolio Optimization Sequence
+            portfolio_positions, portfolio_value = get_portfolio_positions(db_user.alpaca_account_id)
+            total_allocation, leftover = optimize_portfolio(
+                get_market_data(portfolio_positions), portfolio_value
+            )
+        
+        else:
+            logger.debug("Unable to optimize portfolio. User needs at least 2 holdings.")
+            total_allocation = {}
+            leftover = -1
+
         # Package it for the frontend
         return {
             "status": "success",
             "portfolio": portfolio_data,
-            "holdings": holdings_data
+            "holdings": holdings_data,
+            "optimized_portfolio": total_allocation,
+            "leftover": leftover
         }
 
     except Exception as e:
