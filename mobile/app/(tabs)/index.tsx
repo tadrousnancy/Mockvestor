@@ -9,6 +9,8 @@ import {
     saveDifficultySettings,
     getDifficultyMode,
     getStartingAmount,
+    getPortfolioChartHistory, // added for portfolio chart implementation
+    upsertPortfolioSnapshot,
 } from "../../lib/auth";
 //updated imports
 
@@ -33,7 +35,7 @@ const HOLDINGS: Holding[] = [
     { symbol: "TSLA", price: 107.65, shares: 2.3, changePctToday: -0.031 },
 ];
 */
-type RangeKey = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD";
+type RangeKey = "1W" | "1M" | "3M" | "6M" | "YTD"; // changed to only include 1W since 1D does not make sense here
 
 // added: frontend-only difficulty mode type
 type DifficultyMode = "sandbox" | "easy" | "hard";
@@ -60,6 +62,9 @@ export default function TabIndex() {
   // added: difficulty mode calculations
   const startingAmountNum = Number(startingAmount || 0);
 
+  //added: portfolio dashboard chart  
+  const [chartHistory, setChartHistory] = useState<{ date: string; value: number }[]>([]);
+
   const depositAllowed =
       difficultyMode === "sandbox" ||
       (difficultyMode === "easy" && startingAmountNum > 0 && portfolioValue < startingAmountNum) ||
@@ -73,7 +78,7 @@ export default function TabIndex() {
               : "Hard mode only allows deposits once your portfolio drops below half of your original starting amount.";
 
   const rangeButtons: RangeKey[] = useMemo(
-      () => ["1D", "1W", "1M", "3M", "6M", "YTD"],
+      () => ["1W", "1M", "3M", "6M", "YTD"],
       []
   );    // add the fetch function
   const loadPortfolio = useCallback(async () => {
@@ -88,6 +93,10 @@ export default function TabIndex() {
           const data = await apiFetch(`/accounts/${username}/portfolio`, {}, true);
 
           setPortfolio(data.portfolio || null);
+          // added: portfolio chart
+          const currentPortfolioValue = data?.portfolio?.portfolio_value ?? 0;
+          const history = await upsertPortfolioSnapshot(username, currentPortfolioValue);
+          setChartHistory(history);
 
           if (Array.isArray(data.holdings)) {
               setHoldings(data.holdings);
@@ -123,13 +132,73 @@ export default function TabIndex() {
           console.log("Failed to load difficulty settings", error);
       }
   }, []);
+    // added: portfolio chart, add filtered chart data
+    const filteredChartHistory = useMemo(() => {
+    if (!chartHistory.length) return [];
 
-  useFocusEffect(
-      useCallback(() => {
-          loadPortfolio();
-          loadDifficultySettings();
-      }, [loadPortfolio, loadDifficultySettings])
-  ); // this should now load the portfolio whenever the dashboard tab is opened again
+    const today = new Date();
+    const startOfYear = `${today.getFullYear()}-01-01`;
+
+    switch (range) {
+        case "1D":
+            return chartHistory.slice(-1);
+        case "1W":
+            return chartHistory.slice(-7);
+        case "1M":
+            return chartHistory.slice(-30);
+        case "3M":
+            return chartHistory.slice(-90);
+        case "6M":
+            return chartHistory.slice(-180);
+        case "YTD":
+            return chartHistory.filter((p) => p.date >= startOfYear);
+        default:
+            return chartHistory;
+    }
+}, [chartHistory, range]);
+
+    const chartHasEnoughDays = filteredChartHistory.length >= 2;
+
+    const chartBars = useMemo(() => {
+        if (!filteredChartHistory.length) return [];
+    
+        const values = filteredChartHistory.map((p) => p.value);
+        const minValue = Math.min(...values);
+        const maxValue = Math.max(...values);
+        const span = Math.max(maxValue - minValue, 1);
+    
+        return filteredChartHistory.map((point, index) => {
+            const prev = index > 0 ? filteredChartHistory[index - 1].value : point.value;
+            const wentUp = point.value >= prev;
+    
+            return {
+                ...point,
+                height: ((point.value - minValue) / span) * 90 + 20,
+                wentUp,
+            };
+        });
+    }, [filteredChartHistory]);
+    
+    // added: portfolio dashboard chart, load existing chart history helper
+    const loadChartHistory = useCallback(async () => {
+    try {
+        const username = await getStoredUsername();
+        if (!username) return;
+
+        const history = await getPortfolioChartHistory(username);
+        setChartHistory(history);
+    } catch (error) {
+        console.log("Failed to load chart history", error);
+    }
+}, []);
+    
+useFocusEffect(
+    useCallback(() => {
+        loadPortfolio();
+        loadDifficultySettings();
+    }, [loadPortfolio, loadDifficultySettings])
+); // this should now load the portfolio whenever the dashboard tab is opened again
+    //added: portfolio chart
 // logout handler
   async function handleLogout() {
       await clearSession();
@@ -227,18 +296,35 @@ export default function TabIndex() {
                 </View>
             </View>
 
-            {/* chart placeholder */}
+            {/* portfolio chart */}
             <View style={styles.chartCard}>
               <View style={styles.chartTopRow}>
-                <View style={styles.chartTitleStub} />
-                <View style={styles.chartTitleStubSmall} />
+                <Text style={styles.chartTitle}>Portfolio Trend</Text>
+                <Text style={styles.chartSmallLabel}>{range}</Text>
               </View>
-
+            
               <View style={styles.chartBody}>
-                <Ionicons name="stats-chart" size={44} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.chartHint}>
-                  Chart placeholder ({range})
-                </Text>
+                {!chartHasEnoughDays ? (
+                  <Text style={styles.chartHint}>
+                    Portfolio chart will generate when you have enough days to compare
+                  </Text>
+                ) : (
+                  <View style={styles.barChartRow}>
+                    {chartBars.map((bar, index) => (
+                      <View key={`${bar.date}-${index}`} style={styles.barWrap}>
+                        <View
+                          style={[
+                            styles.bar,
+                            {
+                              height: bar.height,
+                              backgroundColor: bar.wentUp ? GREEN : "#ff4d7d",
+                            },
+                          ]}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
@@ -451,7 +537,7 @@ function stripTrailingZeros(n: number) {
   // 1.2 -> "1.2", 4.0 -> "4"
   return Number.isInteger(n) ? String(n) : String(n);
 }
-      
+//added: portfolio chart
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { flex: 1, paddingHorizontal: 18, paddingTop: 10 },
@@ -602,6 +688,36 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
+
+    chartTitle: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 14,
+},
+chartSmallLabel: {
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "800",
+    fontSize: 12,
+},
+barChartRow: {
+    width: "100%",
+    height: "100%",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+},
+barWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    marginHorizontal: 2,
+},
+bar: {
+    width: "70%",
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+},
+    
   chartCard: {
     width: "100%",
     borderRadius: 18,
