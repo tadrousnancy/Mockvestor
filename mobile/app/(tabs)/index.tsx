@@ -3,7 +3,13 @@ import { SafeAreaView, View, Text, StyleSheet, Pressable, FlatList, Alert, TextI
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { apiFetch } from "../../lib/api";
-import { clearSession, getStoredUsername } from "../../lib/auth";
+import {
+    clearSession,
+    getStoredUsername,
+    saveDifficultySettings,
+    getDifficultyMode,
+    getStartingAmount,
+} from "../../lib/auth";
 //updated imports
 
 const GREEN = "#2FD59B"
@@ -33,6 +39,9 @@ const HOLDINGS: Holding[] = [
 */
 type RangeKey = "1D" | "1W" | "1M" | "3M" | "6M" | "YTD";
 
+// added: frontend-only difficulty mode type
+type DifficultyMode = "sandbox" | "easy" | "hard";
+
 export default function TabIndex() {
   // replace placeholder portfolio values and add fetch state
   const router = useRouter();
@@ -43,10 +52,29 @@ export default function TabIndex() {
   const [depositAmount, setDepositAmount] = useState("");
   const [depositing, setDepositing] = useState(false);
 
+  // added: difficulty mode state
+  const [difficultyMode, setDifficultyMode] = useState<DifficultyMode>("sandbox");
+  const [startingAmount, setStartingAmount] = useState("");
+
   const portfolioValue = portfolio?.portfolio_value ?? 0;
   const buyingPower = portfolio?.buying_power ?? 0;
   const cashBalance = portfolio?.cash_balance ?? portfolio?.cash ?? 0;
   const portfolioChangePctToday = 0.0; // placeholder until backend returns day change
+
+  // added: difficulty mode calculations
+  const startingAmountNum = Number(startingAmount || 0);
+
+  const depositAllowed =
+      difficultyMode === "sandbox" ||
+      (difficultyMode === "easy" && startingAmountNum > 0 && portfolioValue < startingAmountNum) ||
+      (difficultyMode === "hard" && startingAmountNum > 0 && portfolioValue < startingAmountNum / 2);
+
+  const depositBlockedMessage =
+      difficultyMode === "sandbox"
+          ? ""
+          : difficultyMode === "easy"
+              ? "Easy mode only allows deposits once your portfolio drops below your original starting amount."
+              : "Hard mode only allows deposits once your portfolio drops below half of your original starting amount.";
 
   const rangeButtons: RangeKey[] = useMemo(
       () => ["1D", "1W", "1M", "3M", "6M", "YTD"],
@@ -81,10 +109,33 @@ export default function TabIndex() {
           setLoading(false);
       }
   }, []);
+
+  // added: load saved difficulty mode + starting amount for the logged in user
+  const loadDifficultySettings = useCallback(async () => {
+      try {
+          const username = await getStoredUsername();
+          if (!username) return;
+
+          const savedMode = await getDifficultyMode(username);
+          const savedStartingAmount = await getStartingAmount(username);
+
+          if (savedMode) {
+              setDifficultyMode(savedMode);
+          }
+
+          if (savedStartingAmount !== null) {
+              setStartingAmount(savedStartingAmount);
+          }
+      } catch (error) {
+          console.log("Failed to load difficulty settings", error);
+      }
+  }, []);
+
   useFocusEffect(
       useCallback(() => {
           loadPortfolio();
-      }, [loadPortfolio])
+          loadDifficultySettings();
+      }, [loadPortfolio, loadDifficultySettings])
   ); // this should now load the portfolio whenever the dashboard tab is opened again
 // logout handler
   async function handleLogout() {
@@ -95,6 +146,19 @@ export default function TabIndex() {
 
   async function handleDeposit() {
       const amountNum = Number(depositAmount);
+
+      // added: difficulty mode restrictions (changes frontend only, good for our demo but backend deposits could theoretically still be called directly)
+      if (difficultyMode !== "sandbox") {
+          if (!Number.isFinite(startingAmountNum) || startingAmountNum <= 0) {
+              Alert.alert("Set starting amount", "Please enter your original starting amount first.");
+              return;
+          }
+
+          if (!depositAllowed) {
+              Alert.alert("Deposit locked", depositBlockedMessage);
+              return;
+          }
+      }
 
       if (!Number.isFinite(amountNum) || amountNum <= 0) {
           Alert.alert("Invalid amount", "Please enter a deposit amount greater than 0.");
@@ -143,12 +207,13 @@ export default function TabIndex() {
                 <Text style={styles.brand}>MOCKVESTOR</Text>
               </View>
 
-              <View style={styles.headerRight}>
+       <View style={styles.headerRight}>
                 <View style={styles.streakMini}>
                   <Ionicons name="flame" size={25} color={DARK_GREEN} />
                   <Text style={styles.streakMiniText}>{streakCount}</Text>
-              </View>
+                </View>
     
+
               <Pressable
                 onPress={() => console.log("profile pressed")}
                 hitSlop={10}
@@ -159,7 +224,6 @@ export default function TabIndex() {
               </View>
             </View>
 
-    
             {/* portfolio value card. updated to use real backend data instead of placeholders */}
             <View style={styles.portfolioCard}>
                 <View style={{ flex: 1 }}>
@@ -179,14 +243,14 @@ export default function TabIndex() {
                     <Ionicons name="wallet-outline" size={26} color="#0b2b22" />
                 </View>
             </View>
-    
+
             {/* chart placeholder */}
             <View style={styles.chartCard}>
               <View style={styles.chartTopRow}>
                 <View style={styles.chartTitleStub} />
                 <View style={styles.chartTitleStubSmall} />
               </View>
-    
+
               <View style={styles.chartBody}>
                 <Ionicons name="stats-chart" size={44} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.chartHint}>
@@ -194,7 +258,7 @@ export default function TabIndex() {
                 </Text>
               </View>
             </View>
-    
+
             {/* time range tabs */}
             <View style={styles.rangeRow}>
               {rangeButtons.map((k) => {
@@ -213,7 +277,7 @@ export default function TabIndex() {
                 );
               })}
             </View>
-    
+
             {/* holdings header */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Current Holdings</Text>
@@ -230,6 +294,91 @@ export default function TabIndex() {
                 style={{ width: "100%" }}
             />
 
+            {/* added: difficulty mode card */}
+            <View style={styles.modeCard}>
+                <Text style={styles.modeTitle}>Difficulty Mode</Text>
+
+                <View style={styles.modeRow}>
+                    {(["sandbox", "easy", "hard"] as DifficultyMode[]).map((mode) => {
+                        const active = difficultyMode === mode;
+                        return (
+                            <Pressable
+                                key={mode}
+                                style={[styles.modeBtn, active && styles.modeBtnActive]}
+                                onPress={async () => {
+                                    setDifficultyMode(mode);
+
+                                    const username = await getStoredUsername();
+                                    if (!username) return;
+
+                                    await saveDifficultySettings({
+                                        username,
+                                        mode,
+                                        startingAmount,
+                                    });
+                                }}
+                            >
+                                <Text style={[styles.modeBtnText, active && styles.modeBtnTextActive]}>
+                                    {mode.toUpperCase()}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
+                </View>
+
+                <Text style={styles.modeLabel}>Original Starting Amount</Text>
+                <TextInput
+                    value={startingAmount}
+                    onChangeText={async (text) => {
+                        setStartingAmount(text);
+
+                        const username = await getStoredUsername();
+                        if (!username) return;
+
+                        await saveDifficultySettings({
+                            username,
+                            mode: difficultyMode,
+                            startingAmount: text,
+                        });
+                    }}
+                    keyboardType="decimal-pad"
+                    placeholder="10000"
+                    placeholderTextColor="rgba(255,255,255,0.55)"
+                    style={styles.modeInput}
+                />
+
+                <Pressable
+                    style={styles.modeHelperBtn}
+                    onPress={async () => {
+                        const value = String(portfolioValue || 0);
+                        setStartingAmount(value);
+
+                        const username = await getStoredUsername();
+                        if (!username) return;
+
+                        await saveDifficultySettings({
+                            username,
+                            mode: difficultyMode,
+                            startingAmount: value,
+                        });
+                    }}
+                >
+                    <Text style={styles.modeHelperText}>Use Current Portfolio Value</Text>
+                </Pressable>
+
+                <Text style={styles.modeStatus}>
+                    Mode: {difficultyMode.toUpperCase()}
+                </Text>
+
+                {difficultyMode !== "sandbox" && (
+                    <Text style={styles.modeHint}>
+                        {depositAllowed
+                            ? "Deposits are currently allowed."
+                            : depositBlockedMessage}
+                    </Text>
+                )}
+            </View>
+
             <View style={styles.depositCard}>
                 <Text style={styles.depositTitle}>Add Funds</Text>
 
@@ -243,12 +392,19 @@ export default function TabIndex() {
                 />
 
                 <Pressable
-                    style={[styles.depositBtn, depositing && { opacity: 0.7 }]}
+                    style={[
+                        styles.depositBtn,
+                        (depositing || (difficultyMode !== "sandbox" && !depositAllowed)) && { opacity: 0.7 }
+                    ]}
                     onPress={handleDeposit}
-                    disabled={depositing}
+                    disabled={depositing || (difficultyMode !== "sandbox" && !depositAllowed)}
                 >
                     <Text style={styles.secondaryBtnText}>
-                        {depositing ? "DEPOSITING..." : "DEPOSIT FUNDS"}
+                        {depositing
+                            ? "DEPOSITING..."
+                            : difficultyMode !== "sandbox" && !depositAllowed
+                                ? "DEPOSIT LOCKED"
+                                : "DEPOSIT FUNDS"}
                     </Text>
                 </Pressable>
             </View>
@@ -319,6 +475,82 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { flex: 1, paddingHorizontal: 18, paddingTop: 10 },
   scrollContent: { paddingBottom: 24},
+
+    // added: difficulty mode styles
+    modeCard: {
+        width: "100%",
+        backgroundColor: BLACK,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 12,
+    },
+    modeTitle: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "900",
+        marginBottom: 10,
+    },
+    modeRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        marginBottom: 12,
+        gap: 8,
+    },
+    modeBtn: {
+        flex: 1,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: "center",
+    },
+    modeBtnActive: {
+        backgroundColor: GREEN,
+    },
+    modeBtnText: {
+        color: "#fff",
+        fontWeight: "900",
+        fontSize: 12,
+    },
+    modeBtnTextActive: {
+        color: "#0b2b22",
+    },
+    modeLabel: {
+        color: "#fff",
+        fontWeight: "800",
+        marginBottom: 6,
+    },
+    modeInput: {
+        backgroundColor: "rgba(255,255,255,0.12)",
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "800",
+        marginBottom: 10,
+    },
+    modeHelperBtn: {
+        backgroundColor: "#1B7A61",
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    modeHelperText: {
+        color: "#fff",
+        fontWeight: "900",
+        fontSize: 13,
+    },
+    modeStatus: {
+        color: "#fff",
+        fontWeight: "900",
+        marginBottom: 6,
+    },
+    modeHint: {
+        color: "rgba(255,255,255,0.8)",
+        fontSize: 12,
+        lineHeight: 18,
+    },
 
     depositCard: {
         width: "100%",

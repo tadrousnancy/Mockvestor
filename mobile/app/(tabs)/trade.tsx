@@ -36,6 +36,23 @@ type QuoteData = {
     ask_price: number;
     bid_price: number;
     timestamp: string;
+// ml info banner 
+    day_risk?: string;
+    day_vol?: number | string;
+    day_exp_low?: number | string;
+    day_exp_high?: number | string;
+
+    week_risk?: string;
+    week_vol?: number | string;
+    week_exp_low?: number | string;
+    week_exp_high?: number | string;
+
+    month_risk?: string;
+    month_vol?: number | string;
+    month_exp_low?: number | string;
+    month_exp_high?: number | string;
+
+    risk_level?: string;
 };
 
 // added: historical chart data type from new backend chart endpoint
@@ -88,24 +105,6 @@ export default function TradeScreen() {
 
   const estimatedCost = displayPrice != null && Number.isFinite(qtyNum) ? qtyNum * displayPrice : null;
 
-  // trade impact indicator 
-  const tradeImpact = useMemo(() => {
-    const qty = Number(quantity || 0);
-    if (qty === 0) return null;
-  
-    // % of buying power used
-    //const usage = estimatedCost / buyingPower;
-    const usage = buyingPower ? (estimatedCost ?? 0) / buyingPower : 0;
-  
-    if (usage >= 0.8 || qty >= 10) {
-      return "High";
-    } else if (usage >= 0.4 || qty >= 5) {
-      return "Moderate";
-    } else {
-      return "Low";
-    }
-  }, [quantity, estimatedCost, buyingPower]);
-
   // risk warning banner messages 
   const riskWarningMessage = useMemo(() => {
     const qty = Number(quantity || 0);
@@ -132,6 +131,85 @@ export default function TradeScreen() {
   
     return null;
   }, [mode, quantity, estimatedCost, buyingPower]);
+
+  const mlInfoBannerMessage = useMemo(() => {
+    if (!quote) return null;
+  
+    if (range === "1D") {
+      if (
+        quote.day_vol == null ||
+        quote.day_risk == null ||
+        quote.day_exp_low == null ||
+        quote.day_exp_high == null
+      ) {
+        return null;
+      }
+  
+      return `1D Expected Volatility: ${quote.day_vol}% (${quote.day_risk}) | Expected Range: $${quote.day_exp_low} - $${quote.day_exp_high}`;
+    }
+  
+    if (range === "1W") {
+      if (
+        quote.week_vol == null ||
+        quote.week_risk == null ||
+        quote.week_exp_low == null ||
+        quote.week_exp_high == null
+      ) {
+        return null;
+      }
+  
+      return `5D Expected Volatility: ${quote.week_vol}% (${quote.week_risk}) | Expected Range: $${quote.week_exp_low} - $${quote.week_exp_high}`;
+    }
+  
+    if (
+      quote.month_vol == null ||
+      quote.month_risk == null ||
+      quote.month_exp_low == null ||
+      quote.month_exp_high == null
+    ) {
+      return null;
+    }
+  
+    return `21D Expected Volatility: ${quote.month_vol}% (${quote.month_risk}) | Expected Range: $${quote.month_exp_low} - $${quote.month_exp_high}`;
+  }, [quote, range]);
+
+  const [mlBannerDismissed, setMlBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    setMlBannerDismissed(false);
+  }, [quote, range]);
+
+  const mlRiskLevel = useMemo(() => {
+    if (!quote) return null;
+  
+    if (range === "1D") return quote.day_risk ?? quote.risk_level ?? null;
+    if (range === "1W") return quote.week_risk ?? quote.risk_level ?? null;
+    return quote.month_risk ?? quote.risk_level ?? null;
+  }, [quote, range]);
+
+  const tradeButtonColor = useMemo(() => {
+    const risk = (mlRiskLevel ?? "").toLowerCase();
+  
+    if (risk === "very high") return "#7A0019";   // dark red
+    if (risk === "high") return "#ff4d4f";        // red
+    if (risk === "moderate") return "#FFD166";    // yellow
+    if (risk === "low") return GREEN;             // green
+  
+    // fallback
+    return mode === "SELL" ? SELL_PINK : GREEN;
+  }, [mlRiskLevel, mode]);
+
+  // trade impact indicator 
+  const tradeImpact = useMemo(() => {
+    if (!mlRiskLevel) return null;
+  
+    const risk = mlRiskLevel.toLowerCase();
+    if (risk === "low") return "Low";
+    if (risk === "moderate") return "Moderate";
+    if (risk === "high" || risk === "very high") return "High";
+  
+    return null;
+  }, [mlRiskLevel]);
 
   // changed: still uses portfolio endpoint, but now only to get buying power + held shares for active searched symbol
   const loadPortfolioInfo = useCallback(async () => {
@@ -175,7 +253,22 @@ export default function TradeScreen() {
       try {
           setLoadingQuote(true);
           const data = await apiFetch(`/markets/quote/${normalizedActiveSymbol}`, {}, true);
-          setQuote(data?.data ?? null);
+          setQuote({
+            ...(data?.data ?? {}),
+            day_risk: data?.day_risk,
+            day_vol: data?.day_vol,
+            day_exp_low: data?.day_exp_low,
+            day_exp_high: data?.day_exp_high,
+            week_risk: data?.week_risk,
+            week_vol: data?.week_vol,
+            week_exp_low: data?.week_exp_low,
+            week_exp_high: data?.week_exp_high,
+            month_risk: data?.month_risk,
+            month_vol: data?.month_vol,
+            month_exp_low: data?.month_exp_low,
+            month_exp_high: data?.month_exp_high,
+            risk_level: data?.risk_level,
+        });
       } catch (error: any) {
           setQuote(null);
           throw error;
@@ -551,6 +644,14 @@ export default function TradeScreen() {
             />
         )}
 
+        {mlInfoBannerMessage && !mlBannerDismissed && (
+          <RiskWarningBanner
+            message={mlInfoBannerMessage}
+            onClose={() => setMlBannerDismissed(true)}
+          />
+        )}
+
+
         {/* quantity */}
         <View style={styles.quantityCard}>
           <Text style={styles.quantityLabel}>Quantity</Text>
@@ -660,10 +761,11 @@ export default function TradeScreen() {
         {/* execute button */}
         <Pressable
             style={[
-                styles.executeBtn,
-                mode === "SELL" && styles.executeBtnSell,
-                (submitting || !symbolIsSynced) && { opacity: 0.7 },
+              styles.executeBtn,
+              { backgroundColor: tradeButtonColor },
+              (submitting || !symbolIsSynced) && { opacity: 0.7 },
             ]}
+
             onPress={handleExecuteTrade}
             disabled={submitting || !symbolIsSynced}
         >

@@ -8,7 +8,8 @@ from alpaca.broker.enums import AgreementType, TaxIdType, BankAccountType, Trans
 from src.core.broker_config import get_broker_client, get_data_client
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.data.requests import StockLatestQuoteRequest
+from alpaca.data.requests import StockLatestQuoteRequest, StockBarsRequest
+from datetime import date, timedelta
 
 ticker_path = Path(__file__).parent / "tickers.csv"
 
@@ -138,6 +139,23 @@ def get_account_holdings(alpaca_account_id: str):
             "positions": formatted_positions
         }
 
+    except Exception as e:
+        logger.info(f"ALPACA POSITIONS ERROR: {str(e)}")
+
+def get_portfolio_positions(alpaca_account_id: str):
+    client = get_broker_client()
+
+    # Retrieve all positions currently held by user
+    try:
+        raw_positions = client.get_all_positions_for_account(account_id=alpaca_account_id)
+        portfolio_positions = []
+        for pos in raw_positions:
+            portfolio_positions.append(pos.symbol)
+        
+        live_trade_account = client.get_trade_account_by_id(account_id=alpaca_account_id)
+        
+        return portfolio_positions, int(float(live_trade_account.portfolio_value))
+    
     except Exception as e:
         logger.info(f"ALPACA POSITIONS ERROR: {str(e)}")
 

@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 from src.core.logger import logger
-from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_value, submit_mock_order, get_live_quote
+from src.services.account_service import create_mock_account, deposit_to_mock_account, get_account_holdings, get_portfolio_positions, get_portfolio_value, submit_mock_order, get_live_quote
 from src.services.database import create_db_and_tables, get_db
 from src.models.user import User
 from src.models.transaction import Transaction
@@ -12,6 +12,8 @@ from src.auth.Account import Account
 from fastapi.middleware.cors import CORSMiddleware
 from src.auth.jwt_handler import create_access_token, get_current_user_id
 from src.services.daily_fetch import get_historical_chart_data
+from src.services.trade_feedback import Feedback
+from src.services.portfolio import get_market_data, optimize_portfolio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -132,8 +134,8 @@ async def register_user(user_data: UserSignUp, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         # Something crashed somwhere
-        logger.info(f"HTTP Exception: Status Code 500 - Internal Server Error")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        logger.info(f"HTTP Exception: Status Code 500 - Internal Server Error - {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error - {str(e)}. Check logs for more details")
 
 class UserLogin(BaseModel):
     username: str
@@ -214,7 +216,7 @@ async def deposit_funds(user_id: str, deposit_data: DepositRequest, db: Session 
 
     except Exception as e:
         logger.info(f"DEPOSIT ERROR: {str(e)}")
-        raise HTTPException(status_code=502, detail="Transfer failed")
+        raise HTTPException(status_code=502, detail=f"Transfer failed. Check logs for more details.")
 
 @app.get("/accounts/{user_id}/portfolio")
 async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_user_id: str = Depends(get_current_user_id)):
@@ -245,18 +247,33 @@ async def get_portfolio(user_id: str, db: Session = Depends(get_db), current_use
         portfolio_data = get_portfolio_value(db_user.alpaca_account_id)
         holdings_data = get_account_holdings(db_user.alpaca_account_id)
 
+        if (holdings_data['position_count'] >= 2):
+            
+            # Begin Portfolio Optimization Sequence
+            portfolio_positions, portfolio_value = get_portfolio_positions(db_user.alpaca_account_id)
+            total_allocation, leftover = optimize_portfolio(
+                get_market_data(portfolio_positions), portfolio_value
+            )
+        
+        else:
+            logger.debug("Unable to optimize portfolio. User needs at least 2 holdings.")
+            total_allocation = {}
+            leftover = -1
+
         # Package it for the frontend
         return {
             "status": "success",
             "portfolio": portfolio_data,
-            "holdings": holdings_data
+            "holdings": holdings_data,
+            "optimized_portfolio": total_allocation,
+            "leftover": leftover
         }
 
     except Exception as e:
         logger.info(f"PORTFOLIO ERROR: {str(e)}...failed to fetch portfolio data.")
         raise HTTPException(
             status_code=502,
-            detail="Failed to fetch portfolio data"
+            detail="Failed to fetch portfolio data. Check logs for more details"
         )
 
 class OrderRequest(BaseModel):
@@ -328,11 +345,39 @@ async def fetch_live_quote(
     ticker: str,
     current_user_id: str = Depends(get_current_user_id)
 ):
+    trade_feedback = Feedback()
     try:
         quote_data = get_live_quote(ticker)
+        risk_pred, risk_level, risk_base = trade_feedback.predict_risk(ticker)
+        day_risk = risk_pred['1d'][3]
+        day_vol = f"{risk_pred['1d'][0]:.2%}"
+        day_expLow = f"{risk_pred['1d'][1]:.2f}"
+        day_expHigh = f"{risk_pred['1d'][2]:.2f}"
+        week_risk = risk_pred['5d'][3]
+        week_vol = f"{risk_pred['5d'][0]:.2%}"
+        week_expLow = f"{risk_pred['5d'][1]:.2f}"
+        week_expHigh = f"{risk_pred['5d'][2]:.2f}"
+        month_risk = risk_pred['21d'][3]
+        month_vol = f"{risk_pred['21d'][0]:.2%}"
+        month_expLow = f"{risk_pred['21d'][1]:.2f}"
+        month_expHigh = f"{risk_pred['21d'][2]:.2f}"
+
         return {
             "status": "success",
-            "data": quote_data
+            "data": quote_data,
+            "day_risk": day_risk,
+            "day_vol": day_vol,
+            "day_exp_low": day_expLow,
+            "day_exp_high": day_expHigh,
+            "week_risk": week_risk,
+            "week_vol": week_vol,
+            "week_exp_low": week_expLow,
+            "week_exp_high": week_expHigh,
+            "month_risk": month_risk,
+            "month_vol": month_vol,
+            "month_exp_low": month_expLow,
+            "month_exp_high": month_expHigh,
+            "risk_level": risk_level
         }
     except Exception as e:
         raise HTTPException(
