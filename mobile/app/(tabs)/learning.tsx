@@ -1,10 +1,14 @@
 import React from "react";
-import { SafeAreaView, ScrollView, View, Text, StyleSheet } from "react-native";
+import { SafeAreaView, ScrollView, View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const BG = "#F4F4F4";
 const BLACK = "#0b0b0b";
 const GREEN = "#2FD59B";
+const DARK_GREEN = "#1B7A61";
+
+// placeholder value for daily streak 
+const streakCount = 3;
 
 const concepts = [
   {
@@ -115,8 +119,28 @@ export default function LearningScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        {/* header */}
+        <View style={styles.headerRow}>
+            <View style={styles.brandRow}>
+                <Ionicons name="trending-up" size={26} color={DARK_GREEN} />
+                <Text style={styles.brand}>MOCKVESTOR</Text>
+            </View>
+                
+            <View style={styles.headerRight}>
+                <View style={styles.streakMini}>
+                    <Ionicons name="flame" size={25} color={DARK_GREEN} />
+                    <Text style={styles.streakMiniText}>{streakCount}</Text>
+                </View>
+                
+                <Pressable onPress={() => console.log("profile pressed")} hitSlop={10}>
+                    <Ionicons name="person-circle-outline" size={30} color={DARK_GREEN} />
+                </Pressable>
+            </View>
+        </View>
+
+        
         <View style={styles.headerCard}>
-          <View style={styles.headerRow}>
+          <View style={styles.headerCardRow}>
             <Ionicons name="school-outline" size={24} color={GREEN} />
             <Text style={styles.headerTitle}>Learning</Text>
           </View>
@@ -156,7 +180,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  headerRow: {
+  headerCardRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -206,5 +230,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     lineHeight: 17,
+  },
+  headerRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  
+  brand: {
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: 1,
+    color: DARK_GREEN,
+  },
+  
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  
+  streakMini: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  
+  streakMiniText: {
+    color: DARK_GREEN,
+    fontSize: 20,
+    fontWeight: "900",
   },
 });
