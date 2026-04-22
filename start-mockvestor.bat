@@ -1,7 +1,7 @@
 @echo off
-title Mockvestor Showcase Setup
+title Mockvestor Setup
 echo ===================================================
-echo Welcome to the Mockvestor Local Showcase!
+echo Welcome to the Mockvestor!
 echo ===================================================
 echo.
 

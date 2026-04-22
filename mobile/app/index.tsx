@@ -111,13 +111,6 @@ export default function Index() {
                         </Pressable>
                     </View>
 
-                    <Pressable
-                        onPress={() => Alert.alert("UI only", "Forgot Password pressed")}
-                        hitSlop={10}
-                    >
-                        <Text style={styles.forgot}>Forgot Password?</Text>
-                    </Pressable>
-
                     <Pressable style={styles.button} onPress={handleLogin}>
                         <Text style={styles.buttonText}>Login</Text>
                     </Pressable>
@@ -184,15 +177,6 @@ const styles = StyleSheet.create({
         width: 34,
         alignItems: "center",
         justifyContent: "center",
-    },
-
-    forgot: {
-        marginTop: 10,
-        textAlign: "center",
-        fontSize: 12,
-        color: "#0b2b22",
-        opacity: 0.85,
-        textDecorationLine: "underline",
     },
 
     button: {

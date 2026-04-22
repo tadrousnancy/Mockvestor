@@ -85,3 +85,58 @@ export async function clearDifficultySettings(username: string) {
 }
 
 //matches backend JWT based auth flow and API format to store the token after login
+
+// added: simple local portfolio chart history per user
+type PortfolioChartPoint = {
+    date: string;   // YYYY-MM-DD
+    value: number;
+};
+
+function portfolioChartKey(username: string) {
+    return `mockvestor_portfolio_chart_${username}`;
+}
+
+export async function getPortfolioChartHistory(username: string): Promise<PortfolioChartPoint[]> {
+    const raw = await SecureStore.getItemAsync(portfolioChartKey(username));
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed.filter(
+                (p) =>
+                    typeof p?.date === "string" &&
+                    typeof p?.value === "number" &&
+                    Number.isFinite(p.value)
+            );
+        }
+        return [];
+    } catch {
+        return [];
+    }
+}
+
+export async function savePortfolioChartHistory(
+    username: string,
+    history: PortfolioChartPoint[]
+) {
+    await SecureStore.setItemAsync(portfolioChartKey(username), JSON.stringify(history));
+}
+
+export async function upsertPortfolioSnapshot(username: string, value: number) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const history = await getPortfolioChartHistory(username);
+
+    const existingIndex = history.findIndex((p) => p.date === today);
+
+    if (existingIndex >= 0) {
+        history[existingIndex] = { date: today, value };
+    } else {
+        history.push({ date: today, value });
+    }
+
+    history.sort((a, b) => a.date.localeCompare(b.date));
+    await savePortfolioChartHistory(username, history);
+
+    return history;
+}
